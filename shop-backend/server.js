@@ -1,4 +1,4 @@
-import express from "express";
+  import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -8,15 +8,11 @@ dotenv.config();
 const app = express();
 
 // ✅ CORS 설정 (프론트 주소 허용)
-app.use(
-  cors({
-    origin: [
-      "https://shop-frontend-cz3y-fhf0fcvqd-kmh3476s-projects.vercel.app", // Vercel 프론트
-      "http://localhost:5173", // 로컬 개발용
-    ],
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: "*",   // 배포 테스트용 전체 허용
+  methods: ["GET", "POST", "DELETE"],
+  allowedHeaders: ["Content-Type"]
+}));
 
 app.use(express.json());
 
