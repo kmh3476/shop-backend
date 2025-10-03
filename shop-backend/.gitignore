@@ -1,0 +1,10 @@
+# node_modules는 올리지 않음
+node_modules/
+
+# 빌드 결과물도 올리지 않음
+dist/
+.vercel/
+
+# 환경변수는 올리지 않음
+.env
+.env.local
