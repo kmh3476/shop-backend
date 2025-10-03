@@ -6,7 +6,18 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// ✅ CORS 설정 (프론트 주소 허용)
+app.use(
+  cors({
+    origin: [
+      "https://shop-frontend-cz3y-fhf0fcvqd-kmh3476s-projects.vercel.app", // Vercel 프론트
+      "http://localhost:5173", // 로컬 개발용
+    ],
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 // DB 연결
