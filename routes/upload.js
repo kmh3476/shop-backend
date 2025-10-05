@@ -17,10 +17,8 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename(req, file, cb) {
-    cb(
-      null,
-      `${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`
-    );
+    const safeName = file.originalname.replace(/\s+/g, "_");
+    cb(null, `${Date.now()}-${safeName}`);
   },
 });
 
@@ -32,8 +30,9 @@ router.post("/", upload.single("image"), (req, res) => {
     return res.status(400).json({ message: "No file uploaded" });
   }
 
-  // 파일 접근 URL 반환 (Render 기준)
-  const fileUrl = `${req.protocol}://${req.get("host")}/${req.file.path}`;
+  // ✅ Render는 항상 HTTPS를 사용하므로 강제로 https:// 붙이기
+  const fileUrl = `https://${req.get("host")}/${req.file.path.replace(/\\/g, "/")}`;
+
   res.status(200).json({ imageUrl: fileUrl });
 });
 
