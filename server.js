@@ -3,7 +3,9 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import productRoutes from "./routes/productRoutes.js";
+import uploadRouter from "./routes/upload.js";
 app.use("/api", productRoutes);
+app.use("/api/upload", uploadRouter);
 
 
 dotenv.config();
