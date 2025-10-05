@@ -6,6 +6,9 @@ import productRoutes from "./routes/productRoutes.js";
 import uploadRouter from "./routes/upload.js";
 
 dotenv.config();
+console.log("🔹 CLOUD_NAME:", process.env.CLOUD_NAME);
+console.log("🔹 CLOUD_API_KEY:", process.env.CLOUD_API_KEY);
+console.log("🔹 CLOUD_API_SECRET:", process.env.CLOUD_API_SECRET);
 const app = express();
 
 // ✅ CORS 설정
