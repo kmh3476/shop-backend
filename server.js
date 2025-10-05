@@ -1,4 +1,3 @@
-// ✅ 필요한 모듈 불러오기
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -6,34 +5,19 @@ import dotenv from "dotenv";
 import productRoutes from "./routes/productRoutes.js";
 import uploadRouter from "./routes/upload.js";
 
-// ✅ 1. 환경 변수 로드 (.env)
 dotenv.config();
-
-// ✅ 2. Express 앱 생성
 const app = express();
 
-// ✅ 3. 환경 변수 로그 (확인용)
-console.log("🔹 CLOUD_NAME:", process.env.CLOUD_NAME || "❌ 없음");
-console.log("🔹 CLOUD_API_KEY:", process.env.CLOUD_API_KEY || "❌ 없음");
-console.log(
-  "🔹 CLOUD_API_SECRET:",
-  process.env.CLOUD_API_SECRET ? "✅ 있음" : "❌ 없음"
-);
-console.log("🔹 MONGO_URI:", process.env.MONGO_URI ? "✅ 있음" : "❌ 없음");
-
-// ✅ 4. CORS 설정 (프론트엔드 주소만 허용 권장)
 app.use(
   cors({
-    origin: "*", // 개발용: 전체 허용. 배포 시엔 프론트 주소(Vercel URL)로 변경
+    origin: "*",
     methods: ["GET", "POST", "DELETE", "PUT"],
     allowedHeaders: ["Content-Type"],
   })
 );
 
-// ✅ 5. JSON 파싱
 app.use(express.json());
 
-// ✅ 6. MongoDB 연결
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -42,18 +26,14 @@ mongoose
   .then(() => console.log("✅ MongoDB 연결 성공"))
   .catch((err) => console.error("❌ MongoDB 연결 실패:", err.message));
 
-// ✅ 7. 기본 라우트
 app.get("/", (req, res) => {
   res.send("🛍️ Shop backend API running...");
 });
 
-// ✅ 8. 라우트 등록
-// ⚠️ 프론트엔드 baseURL이 이미 /api 이므로 여기서는 /api 제거
-app.use("/products", productRoutes);
-app.use("/upload", uploadRouter);
+app.use("/api/products", productRoutes);
+app.use("/api/upload", uploadRouter);
 
-// ✅ 9. 서버 실행
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
