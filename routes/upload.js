@@ -1,37 +1,36 @@
 import express from "express";
 import multer from "multer";
-import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
-import dotenv from "dotenv";
-
-dotenv.config();
+import { v2 as cloudinary } from "cloudinary";
 
 const router = express.Router();
 
-// 🔹 Cloudinary 환경변수
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
 });
 
-// 🔹 multer-storage-cloudinary 설정
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "shop-products", // Cloudinary 폴더명
+    folder: "shop-images",
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
 
 const upload = multer({ storage });
 
-// 🔹 실제 업로드 엔드포인트
 router.post("/", upload.single("image"), (req, res) => {
-  if (!req.file || !req.file.path) {
-    return res.status(400).json({ error: "업로드 실패" });
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "이미지 업로드 실패 (파일 없음)" });
+    }
+    res.json({ imageUrl: req.file.path });
+  } catch (err) {
+    console.error("❌ 업로드 실패:", err);
+    res.status(500).json({ message: "업로드 실패", error: err });
   }
-  res.json({ imageUrl: req.file.path });
 });
 
 export default router;
