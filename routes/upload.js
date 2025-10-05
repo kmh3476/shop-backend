@@ -8,32 +8,30 @@ dotenv.config();
 
 const router = express.Router();
 
-// 🔹 Cloudinary 설정
+// 🔹 Cloudinary 환경변수
 cloudinary.config({
-  cloud_name: process.env.CLOUD_NAME,
-  api_key: process.env.CLOUD_API_KEY,
-  api_secret: process.env.CLOUD_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// 🔹 Multer + Cloudinary 스토리지 설정
+// 🔹 multer-storage-cloudinary 설정
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "shop-products",
+    folder: "shop-products", // Cloudinary 폴더명
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
 
 const upload = multer({ storage });
 
-// 🔹 업로드 엔드포인트
-router.post("/", upload.single("image"), async (req, res) => {
-  try {
-    res.json({ imageUrl: req.file.path });
-  } catch (err) {
-    console.error("❌ 업로드 실패:", err);
-    res.status(500).json({ error: "이미지 업로드 실패" });
+// 🔹 실제 업로드 엔드포인트
+router.post("/", upload.single("image"), (req, res) => {
+  if (!req.file || !req.file.path) {
+    return res.status(400).json({ error: "업로드 실패" });
   }
+  res.json({ imageUrl: req.file.path });
 });
 
 export default router;
