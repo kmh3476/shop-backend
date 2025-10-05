@@ -55,6 +55,7 @@ app.get("/", (req, res) => {
 // ✅ 실제 API 라우트
 app.use("/api/products", productRoutes);
 app.use("/api/upload", uploadRouter);
+app.use("/uploads", express.static("uploads"));
 
 // ✅ Render용 포트 설정
 const PORT = process.env.PORT || 4000;

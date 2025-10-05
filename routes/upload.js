@@ -1,36 +1,40 @@
 import express from "express";
 import multer from "multer";
-import { v2 as cloudinary } from "cloudinary";
-import { CloudinaryStorage } from "multer-storage-cloudinary";
+import path from "path";
+import fs from "fs";
 
 const router = express.Router();
 
-// ✅ Cloudinary 설정
-cloudinary.config({
-  cloud_name: process.env.CLOUD_NAME,
-  api_key: process.env.CLOUD_API_KEY,
-  api_secret: process.env.CLOUD_API_SECRET,
-});
+// ✅ 업로드 폴더 생성 (Render 등에서도 안전하게)
+const uploadDir = "uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 
-// ✅ Multer + Cloudinary
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "shop_images",
-    allowed_formats: ["jpg", "png", "jpeg"],
+// ✅ multer 저장 설정
+const storage = multer.diskStorage({
+  destination(req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename(req, file, cb) {
+    cb(
+      null,
+      `${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`
+    );
   },
 });
 
 const upload = multer({ storage });
 
-// ✅ 업로드 라우트
-router.post("/upload", upload.single("image"), (req, res) => {
-  try {
-    return res.json({ imageUrl: req.file.path });
-  } catch (err) {
-    console.error("업로드 실패:", err);
-    res.status(500).json({ error: "업로드 실패" });
+// ✅ POST /api/upload (단일 파일 업로드)
+router.post("/", upload.single("image"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
   }
+
+  // 파일 접근 URL 반환 (Render 기준)
+  const fileUrl = `${req.protocol}://${req.get("host")}/${req.file.path}`;
+  res.status(200).json({ imageUrl: fileUrl });
 });
 
 export default router;
