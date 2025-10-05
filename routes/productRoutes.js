@@ -1,5 +1,5 @@
 import express from "express";
-import Product from "./models/Product.js"; // 상품 모델 (mongoose)
+import Product from "../models/Product.js"; // 상품 모델 (mongoose)
 const router = express.Router();
 
 // ✅ 상품 전체 목록 조회
