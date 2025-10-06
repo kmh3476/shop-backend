@@ -14,6 +14,20 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ✅ 상품 상세 조회 추가 (상품 클릭 시 상세페이지용)
+router.get("/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ error: "상품을 찾을 수 없습니다." });
+    }
+    res.json(product);
+  } catch (err) {
+    console.error("❌ 상품 상세 조회 실패:", err);
+    res.status(500).json({ error: "상품 상세 조회 실패" });
+  }
+});
+
 // ✅ 상품 추가 (이미지 URL 포함)
 router.post("/", async (req, res) => {
   try {
@@ -27,7 +41,6 @@ router.post("/", async (req, res) => {
       name,
       price,
       description,
-      // 이미지 없을 때 기본 이미지 URL 적용
       image:
         imageUrl?.trim() ||
         "https://placehold.co/250x200?text=No+Image",
@@ -45,18 +58,16 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { name, price, description, imageUrl } = req.body;
-
     const product = await Product.findById(req.params.id);
+
     if (!product) {
       return res.status(404).json({ error: "상품을 찾을 수 없습니다." });
     }
 
     // 전달된 데이터만 업데이트
-    product.name = name || product.name;
-    product.price = price || product.price;
-    product.description = description || product.description;
-
-    // imageUrl이 있으면 교체, 없으면 기존 이미지 유지
+    if (name) product.name = name;
+    if (price) product.price = price;
+    if (description) product.description = description;
     if (imageUrl) product.image = imageUrl;
 
     const updated = await product.save();

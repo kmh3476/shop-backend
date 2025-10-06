@@ -5,11 +5,12 @@ import path from "path";
 import fs from "fs";
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
+import streamifier from "streamifier";
 
 dotenv.config();
 const router = express.Router();
 
-// ✅ Cloudinary 설정 (환경변수가 있으면 활성화)
+// ✅ Cloudinary 활성 여부 확인
 const isCloudinaryEnabled =
   process.env.CLOUDINARY_CLOUD_NAME &&
   process.env.CLOUDINARY_API_KEY &&
@@ -33,24 +34,14 @@ if (!fs.existsSync(uploadDir)) {
   console.log("📁 uploads 폴더 생성됨:", uploadDir);
 }
 
-// ✅ multer 기본 저장 설정 (로컬)
-const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename(req, file, cb) {
-    const originalName = Buffer.from(file.originalname, "latin1").toString("utf8");
-    const safeName = originalName.replace(/\s+/g, "_").replace(/[^\w가-힣._-]/g, "");
-    cb(null, `${Date.now()}-${safeName}`);
-  },
-});
-
+// ✅ multer 설정
+const storage = multer.memoryStorage(); // ⚡ Render 호환: 메모리 기반
 const upload = multer({ storage });
 
-// ✅ 정적 파일 제공 (로컬 접근용)
+// ✅ 로컬 정적 파일 경로 제공
 router.use("/uploads", express.static(uploadDir));
 
-// ✅ 단일 파일 업로드
+// ✅ 단일 파일 업로드 (Cloudinary + 로컬 자동 선택)
 router.post("/", upload.single("image"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
@@ -60,31 +51,36 @@ router.post("/", upload.single("image"), async (req, res) => {
     let imageUrl;
 
     if (isCloudinaryEnabled) {
-      // ☁️ Cloudinary 업로드
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: "shop-products",
-        use_filename: true,
-        unique_filename: false,
-        overwrite: true,
+      // ☁️ Cloudinary 업로드 (stream 기반 - Render 호환)
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "shop-products" },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(stream);
       });
 
       imageUrl = result.secure_url;
-
-      // ✅ 로컬 파일 정리 (서버 디스크 절약)
-      fs.unlink(req.file.path, (err) => {
-        if (err) console.warn("⚠️ 로컬 임시 파일 삭제 실패:", err.message);
-      });
     } else {
-      // 💾 로컬 저장 모드
+      // 💾 로컬 업로드
+      const filename = `${Date.now()}-${req.file.originalname
+        .replace(/\s+/g, "_")
+        .replace(/[^\w가-힣._-]/g, "")}`;
+      const filePath = path.join(uploadDir, filename);
+      fs.writeFileSync(filePath, req.file.buffer);
+
       const host = req.headers["x-forwarded-host"] || req.get("host");
       const protocol =
         req.headers["x-forwarded-proto"] ||
         (host?.includes("localhost") ? "http" : "https");
 
-      imageUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+      imageUrl = `${protocol}://${host}/uploads/${filename}`;
     }
 
-    console.log("✅ 업로드된 파일:", imageUrl);
+    console.log("✅ 업로드 완료:", imageUrl);
     res.status(200).json({ imageUrl });
   } catch (error) {
     console.error("❌ 업로드 실패:", error.message);
