@@ -1,9 +1,11 @@
+// 📁 server.js
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import productRoutes from "./routes/productRoutes.js";
+import path from "path";
 import uploadRouter from "./routes/upload.js";
+import productRoutes from "./routes/productRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -17,11 +19,11 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // origin이 undefined면 (예: Postman, 같은 서버 요청) 허용
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      // origin이 undefined면 (예: 서버 내부 요청, Postman 등) 허용
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       } else {
+        console.warn(`🚫 CORS 차단된 요청: ${origin}`);
         return callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
       }
     },
@@ -35,7 +37,7 @@ app.use(
 app.options("*", cors());
 
 // ✅ JSON 파싱
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // ✅ MongoDB 연결
 mongoose
@@ -47,15 +49,18 @@ mongoose
   .then(() => console.log("✅ MongoDB 연결 성공"))
   .catch((err) => console.error("❌ MongoDB 연결 실패:", err.message));
 
+// ✅ 업로드 폴더 경로 설정 (절대 경로)
+const __dirname = path.resolve();
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // ✅ 기본 라우트
 app.get("/", (req, res) => {
   res.send("🛍️ Shop backend API running...");
 });
 
 // ✅ 실제 API 라우트
-app.use("/api/products", productRoutes);
 app.use("/api/upload", uploadRouter);
-app.use("/uploads", express.static("uploads"));
+app.use("/api/products", productRoutes);
 
 // ✅ Render용 포트 설정
 const PORT = process.env.PORT || 4000;

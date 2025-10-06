@@ -1,19 +1,10 @@
-// 📁 server.js
+// 📁 routes/upload.js
 import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-// Express 앱 생성
-const app = express();
-
-// ✅ JSON 파서 및 인코딩 설정 (한글 깨짐 방지)
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use((req, res, next) => {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  next();
-});
+const router = express.Router();
 
 // ✅ 업로드 폴더 생성 (Render 등 서버 재시작 환경에서도 안전하게)
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -41,10 +32,10 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ✅ 정적 파일 제공 (업로드된 이미지 접근 가능하게)
-app.use("/uploads", express.static(uploadDir));
+router.use("/uploads", express.static(uploadDir));
 
 // ✅ 단일 파일 업로드 라우트
-app.post("/api/upload", upload.single("image"), (req, res) => {
+router.post("/", upload.single("image"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
   }
@@ -61,12 +52,5 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
   res.status(200).json({ imageUrl: fileUrl });
 });
 
-// ✅ 상품 관련 라우트 연결 (폴더 경로 수정)
-import productRoutes from "./productRoutes.js"; // 🔧 경로 수정됨
-app.use("/api/products", productRoutes);
-
-// ✅ 서버 실행 (Render/Vercel 환경에서는 자동 포트 사용)
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+// ✅ router를 default export
+export default router;
