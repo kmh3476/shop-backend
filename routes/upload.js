@@ -62,7 +62,7 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
 });
 
 // ✅ 예시: 상품 관련 라우트 (이미 존재한다면 그대로 유지)
-import apiRouter from "./routes/api.js"; // ← 상품 관련 라우터 예시
+import apiRouter from "./api.js"; // ← 상품 관련 라우터 예시
 app.use("/api", apiRouter);
 
 // ✅ 서버 실행 (Render/Vercel 환경에서는 자동 포트 사용)
