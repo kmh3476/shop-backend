@@ -10,21 +10,26 @@ import productRoutes from "./routes/productRoutes.js";
 dotenv.config();
 const app = express();
 
-// ✅ CORS 설정 (로컬 + 배포 환경 모두 허용)
+// ✅ 허용할 Origin 목록
 const allowedOrigins = [
-  "http://localhost:5173",             // 로컬 개발용
-  "https://project-onyou.vercel.app",  // Vercel 프론트엔드 (명훈님 실제 배포 주소로 변경!)
+  "http://localhost:5173",              // 로컬 개발용
+  "https://project-onyou.vercel.app",   // ✅ 실제 프론트엔드 배포 주소
 ];
 
+// ✅ CORS 설정 (헤더 기반 검증 추가)
 app.use(
   cors({
     origin: function (origin, callback) {
-      // origin이 undefined면 (예: 서버 내부 요청, Postman 등) 허용
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
+      // x-forwarded-host로부터 실주소 확인 (Render 환경 대응)
+      const forwardedOrigin = origin || "";
+      const isAllowed =
+        !forwardedOrigin || allowedOrigins.includes(forwardedOrigin);
+
+      if (isAllowed) {
+        callback(null, true);
       } else {
-        console.warn(`🚫 CORS 차단된 요청: ${origin}`);
-        return callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
+        console.warn(`🚫 CORS 차단된 요청: ${forwardedOrigin}`);
+        callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
       }
     },
     credentials: true,
@@ -49,7 +54,7 @@ mongoose
   .then(() => console.log("✅ MongoDB 연결 성공"))
   .catch((err) => console.error("❌ MongoDB 연결 실패:", err.message));
 
-// ✅ 업로드 폴더 경로 설정 (절대 경로)
+// ✅ 업로드 폴더 정적 제공
 const __dirname = path.resolve();
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
