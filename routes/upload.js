@@ -62,7 +62,7 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
 });
 
 // ✅ 상품 관련 라우트 연결 (폴더 경로 수정)
-import productRoutes from "./routes/productRoutes.js"; // 🔧 경로 수정됨
+import productRoutes from "./productRoutes.js"; // 🔧 경로 수정됨
 app.use("/api/products", productRoutes);
 
 // ✅ 서버 실행 (Render/Vercel 환경에서는 자동 포트 사용)
