@@ -12,23 +12,26 @@ const app = express();
 
 // ✅ 허용할 Origin 목록
 const allowedOrigins = [
-  "http://localhost:5173",              // 로컬 개발용
-  "https://project-onyou.vercel.app",   // ✅ 실제 프론트엔드 배포 주소
+  "http://localhost:5173",             // 로컬 개발용
+  "https://project-onyou.vercel.app",  // 실제 Vercel 프론트엔드 주소
 ];
 
-// ✅ CORS 설정 (헤더 기반 검증 추가)
+// ✅ CORS 설정 (Render/Vercel 완전 대응)
 app.use(
   cors({
     origin: function (origin, callback) {
-      // x-forwarded-host로부터 실주소 확인 (Render 환경 대응)
-      const forwardedOrigin = origin || "";
-      const isAllowed =
-        !forwardedOrigin || allowedOrigins.includes(forwardedOrigin);
+      if (!origin) return callback(null, true); // 서버 내부 요청(Postman 등)은 허용
+
+      // ✅ Render의 프록시 헤더나 URL 변형도 허용
+      const cleanOrigin = origin.replace(/^https?:\/\//, "");
+      const isAllowed = allowedOrigins.some((allowed) =>
+        cleanOrigin.includes(allowed.replace(/^https?:\/\//, ""))
+      );
 
       if (isAllowed) {
         callback(null, true);
       } else {
-        console.warn(`🚫 CORS 차단된 요청: ${forwardedOrigin}`);
+        console.warn(`🚫 CORS 차단된 요청: ${origin}`);
         callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
       }
     },
