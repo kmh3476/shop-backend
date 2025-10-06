@@ -1,4 +1,4 @@
-// 📁 server.js  또는 index.js
+// 📁 server.js
 import express from "express";
 import multer from "multer";
 import path from "path";
@@ -6,7 +6,14 @@ import fs from "fs";
 
 // Express 앱 생성
 const app = express();
-app.use(express.json());
+
+// ✅ JSON 파서 및 인코딩 설정 (한글 깨짐 방지)
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use((req, res, next) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  next();
+});
 
 // ✅ 업로드 폴더 생성 (Render 등 서버 재시작 환경에서도 안전하게)
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -21,7 +28,12 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename(req, file, cb) {
-    const safeName = file.originalname.replace(/\s+/g, "_");
+    // 🔧 한글 깨짐 방지용 (latin1 → utf8 변환)
+    const originalName = Buffer.from(file.originalname, "latin1").toString("utf8");
+
+    // 🔧 공백, 특수문자 안전 처리
+    const safeName = originalName.replace(/\s+/g, "_").replace(/[^\w가-힣._-]/g, "");
+
     cb(null, `${Date.now()}-${safeName}`);
   },
 });
@@ -39,7 +51,10 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
 
   // ✅ Render / Vercel 대응용 안전한 URL 생성
   const host = req.headers["x-forwarded-host"] || req.get("host");
-  const protocol = req.headers["x-forwarded-proto"] || (host?.includes("localhost") ? "http" : "https");
+  const protocol =
+    req.headers["x-forwarded-proto"] ||
+    (host?.includes("localhost") ? "http" : "https");
+
   const fileUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
 
   console.log("✅ 업로드된 파일:", fileUrl);
