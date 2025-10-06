@@ -62,7 +62,7 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
 });
 
 // ✅ 예시: 상품 관련 라우트 (이미 존재한다면 그대로 유지)
-import productRoutes from "./routes/productRoutes.js";
+import productRoutes from "./productRoutes.js";
 app.use("/api/products", productRoutes);
 
 // ✅ 서버 실행 (Render/Vercel 환경에서는 자동 포트 사용)
