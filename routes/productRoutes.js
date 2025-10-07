@@ -41,21 +41,26 @@ router.post("/", async (req, res) => {
     // ✅ 이미지 정리
     const imageArray =
       Array.isArray(images) && images.length > 0
-        ? images
+        ? images.filter(Boolean)
         : [imageUrl?.trim() || "https://placehold.co/250x200?text=No+Image"];
+
+    // ✅ 대표 이미지(mainImage)가 유효하지 않으면 첫 번째 이미지로 대체
+    const resolvedMain =
+      mainImage && imageArray.includes(mainImage)
+        ? mainImage
+        : imageArray[0];
 
     const newProduct = new Product({
       name,
       price,
       description,
-      image: imageUrl?.trim() || imageArray[0],
+      image: resolvedMain, // 단일 이미지 필드(호환용)
       images: imageArray,
-      // ✅ 대표 이미지(mainImage) 지정 (없으면 첫 번째 이미지)
-      mainImage: mainImage?.trim() || imageArray[0],
+      mainImage: resolvedMain, // ✅ 대표 이미지 필드 저장
     });
 
-    await newProduct.save();
-    res.status(201).json(newProduct);
+    const saved = await newProduct.save();
+    res.status(201).json(saved); // ✅ mainImage 포함해서 응답
   } catch (err) {
     console.error("❌ 상품 추가 실패:", err);
     res.status(500).json({ error: "상품 추가 실패" });
@@ -80,22 +85,22 @@ router.put("/:id", async (req, res) => {
 
     // ✅ 여러 장 이미지
     if (Array.isArray(images)) {
+      const cleanImages = images.filter(Boolean);
       product.images =
-        images.length > 0
-          ? images
+        cleanImages.length > 0
+          ? cleanImages
           : [product.image || "https://placehold.co/250x200?text=No+Image"];
     }
 
-    // ✅ 대표 이미지 변경
-    if (mainImage) {
+    // ✅ 대표 이미지 변경 (없으면 첫 번째 이미지로 대체)
+    if (mainImage && product.images.includes(mainImage)) {
       product.mainImage = mainImage;
-    } else if (!product.mainImage && product.images?.length > 0) {
-      // 대표 이미지가 비어있으면 자동으로 첫 이미지 설정
+    } else if (!product.mainImage || !product.images.includes(product.mainImage)) {
       product.mainImage = product.images[0];
     }
 
     const updated = await product.save();
-    res.json(updated);
+    res.json(updated); // ✅ 수정 후 mainImage 포함 응답
   } catch (err) {
     console.error("❌ 상품 수정 실패:", err);
     res.status(500).json({ error: "상품 수정 실패" });
