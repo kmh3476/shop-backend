@@ -27,46 +27,36 @@ if (isCloudinaryEnabled) {
   console.log("💾 로컬 업로드 모드 (Cloudinary 비활성)");
 }
 
-// ✅ 로컬 업로드 폴더 생성
+// ✅ 로컬 업로드 폴더
 const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log("📁 uploads 폴더 생성됨:", uploadDir);
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// ✅ multer 설정
-const storage = multer.memoryStorage(); // ⚡ Render 호환: 메모리 기반
+// ✅ multer (메모리 저장 방식)
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// ✅ 로컬 정적 파일 경로 제공
+// ✅ 정적 파일
 router.use("/uploads", express.static(uploadDir));
 
 /* --------------------------------------------------------
- ✅ (1) 여러 장 업로드 지원 (Cloudinary + 로컬 자동 선택)
+ ✅ 여러 장 업로드 (완전 병렬 + Cloudinary + 로컬 둘 다 지원)
 -------------------------------------------------------- */
-router.post("/multi", upload.array("image", 10), async (req, res) => {
-  if (!req.files || req.files.length === 0) {
+router.post("/multi", upload.array("image", 20), async (req, res) => {
+  if (!req.files || req.files.length === 0)
     return res.status(400).json({ message: "No files uploaded" });
-  }
 
   try {
-    // ✅ 병렬 업로드 (Cloudinary or Local)
-    const uploadTasks = req.files.map(async (file) => {
-      let imageUrl;
-
+    const uploadPromises = req.files.map(async (file) => {
       if (isCloudinaryEnabled) {
-        // ☁️ Cloudinary 업로드 (stream 기반)
+        // ☁️ Cloudinary 업로드 (Stream 방식)
         const result = await new Promise((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
             { folder: "shop-products" },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
+            (error, result) => (error ? reject(error) : resolve(result))
           );
           streamifier.createReadStream(file.buffer).pipe(stream);
         });
-        imageUrl = result.secure_url;
+        return result.secure_url;
       } else {
         // 💾 로컬 업로드
         const filename = `${Date.now()}-${file.originalname
@@ -80,57 +70,37 @@ router.post("/multi", upload.array("image", 10), async (req, res) => {
           req.headers["x-forwarded-proto"] ||
           (host?.includes("localhost") ? "http" : "https");
 
-        imageUrl = `${protocol}://${host}/uploads/${filename}`;
+        return `${protocol}://${host}/uploads/${filename}`;
       }
-
-      return imageUrl;
     });
 
-    // ✅ 모든 업로드 병렬 처리
-    const results = await Promise.allSettled(uploadTasks);
-    const imageUrls = results
-      .filter((r) => r.status === "fulfilled")
-      .map((r) => r.value);
-
-    if (imageUrls.length === 0) {
-      throw new Error("No images uploaded successfully");
-    }
-
+    const imageUrls = (await Promise.all(uploadPromises)).filter(Boolean);
     console.log(`✅ ${imageUrls.length}개 이미지 업로드 완료`);
     res.status(200).json({ imageUrls });
   } catch (error) {
-    console.error("❌ 다중 업로드 실패:", error.message);
+    console.error("❌ 다중 업로드 실패:", error);
     res.status(500).json({ message: "Multi image upload failed" });
   }
 });
 
 /* --------------------------------------------------------
- ✅ (2) 단일 업로드 (기존 호환 유지)
+ ✅ 단일 업로드 (기존 호환용)
 -------------------------------------------------------- */
 router.post("/", upload.single("image"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ message: "No file uploaded" });
-  }
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
   try {
     let imageUrl;
-
     if (isCloudinaryEnabled) {
-      // ☁️ Cloudinary 업로드 (stream 기반)
       const result = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           { folder: "shop-products" },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
+          (error, result) => (error ? reject(error) : resolve(result))
         );
         streamifier.createReadStream(req.file.buffer).pipe(stream);
       });
-
       imageUrl = result.secure_url;
     } else {
-      // 💾 로컬 업로드
       const filename = `${Date.now()}-${req.file.originalname
         .replace(/\s+/g, "_")
         .replace(/[^\w가-힣._-]/g, "")}`;
@@ -148,7 +118,7 @@ router.post("/", upload.single("image"), async (req, res) => {
     console.log("✅ 단일 업로드 완료:", imageUrl);
     res.status(200).json({ imageUrl });
   } catch (error) {
-    console.error("❌ 단일 업로드 실패:", error.message);
+    console.error("❌ 단일 업로드 실패:", error);
     res.status(500).json({ message: "Image upload failed" });
   }
 });
