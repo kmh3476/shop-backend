@@ -41,7 +41,63 @@ const upload = multer({ storage });
 // ✅ 로컬 정적 파일 경로 제공
 router.use("/uploads", express.static(uploadDir));
 
-// ✅ 단일 파일 업로드 (Cloudinary + 로컬 자동 선택)
+/* --------------------------------------------------------
+ ✅ (1) 여러 장 업로드 지원 (Cloudinary + 로컬 자동 선택)
+-------------------------------------------------------- */
+router.post("/multi", upload.array("image", 10), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ message: "No files uploaded" });
+  }
+
+  try {
+    const imageUrls = [];
+
+    for (const file of req.files) {
+      let imageUrl;
+
+      if (isCloudinaryEnabled) {
+        // ☁️ Cloudinary 업로드 (stream 기반)
+        const result = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "shop-products" },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
+          streamifier.createReadStream(file.buffer).pipe(stream);
+        });
+        imageUrl = result.secure_url;
+      } else {
+        // 💾 로컬 업로드
+        const filename = `${Date.now()}-${file.originalname
+          .replace(/\s+/g, "_")
+          .replace(/[^\w가-힣._-]/g, "")}`;
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, file.buffer);
+
+        const host = req.headers["x-forwarded-host"] || req.get("host");
+        const protocol =
+          req.headers["x-forwarded-proto"] ||
+          (host?.includes("localhost") ? "http" : "https");
+
+        imageUrl = `${protocol}://${host}/uploads/${filename}`;
+      }
+
+      imageUrls.push(imageUrl);
+    }
+
+    console.log(`✅ ${imageUrls.length}개 이미지 업로드 완료`);
+    res.status(200).json({ imageUrls });
+  } catch (error) {
+    console.error("❌ 다중 업로드 실패:", error.message);
+    res.status(500).json({ message: "Multi image upload failed" });
+  }
+});
+
+/* --------------------------------------------------------
+ ✅ (2) 기존 단일 업로드 (호환용, 그대로 유지)
+-------------------------------------------------------- */
 router.post("/", upload.single("image"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
@@ -80,10 +136,10 @@ router.post("/", upload.single("image"), async (req, res) => {
       imageUrl = `${protocol}://${host}/uploads/${filename}`;
     }
 
-    console.log("✅ 업로드 완료:", imageUrl);
+    console.log("✅ 단일 업로드 완료:", imageUrl);
     res.status(200).json({ imageUrl });
   } catch (error) {
-    console.error("❌ 업로드 실패:", error.message);
+    console.error("❌ 단일 업로드 실패:", error.message);
     res.status(500).json({ message: "Image upload failed" });
   }
 });
