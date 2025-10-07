@@ -50,43 +50,47 @@ router.post("/multi", upload.array("image", 10), async (req, res) => {
   }
 
   try {
-    const uploadTasks = req.files.map((file) => {
-      return new Promise((resolve, reject) => {
-        if (isCloudinaryEnabled) {
-          // ☁️ Cloudinary 업로드 (stream 방식)
+    const imageUrls = [];
+
+    for (const file of req.files) {
+      let imageUrl;
+
+      if (isCloudinaryEnabled) {
+        // ☁️ Cloudinary 업로드 (stream 방식, await 보장)
+        const result = await new Promise((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
             { folder: "shop-products" },
             (error, result) => {
               if (error) reject(error);
-              else resolve(result.secure_url);
+              else resolve(result);
             }
           );
           streamifier.createReadStream(file.buffer).pipe(stream);
-        } else {
-          // 💾 로컬 업로드
-          const filename = `${Date.now()}-${file.originalname
-            .replace(/\s+/g, "_")
-            .replace(/[^\w가-힣._-]/g, "")}`;
-          const filePath = path.join(uploadDir, filename);
-          fs.writeFileSync(filePath, file.buffer);
+        });
 
-          const host = req.headers["x-forwarded-host"] || req.get("host");
-          const protocol =
-            req.headers["x-forwarded-proto"] ||
-            (host?.includes("localhost") ? "http" : "https");
+        imageUrl = result.secure_url;
+        console.log("✅ Cloudinary 업로드 성공:", imageUrl);
+      } else {
+        // 💾 로컬 업로드
+        const filename = `${Date.now()}-${file.originalname
+          .replace(/\s+/g, "_")
+          .replace(/[^\w가-힣._-]/g, "")}`;
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, file.buffer);
 
-          const imageUrl = `${protocol}://${host}/uploads/${filename}`;
-          resolve(imageUrl);
-        }
-      });
-    });
+        const host = req.headers["x-forwarded-host"] || req.get("host");
+        const protocol =
+          req.headers["x-forwarded-proto"] ||
+          (host?.includes("localhost") ? "http" : "https");
 
-    // ✅ 병렬로 모든 업로드 기다림
-    const imageUrls = await Promise.all(uploadTasks);
+        imageUrl = `${protocol}://${host}/uploads/${filename}`;
+        console.log("💾 로컬 업로드 성공:", imageUrl);
+      }
 
-    console.log(`✅ ${imageUrls.length}개 이미지 업로드 완료`);
-    console.log("📸 업로드 결과:", imageUrls);
+      imageUrls.push(imageUrl);
+    }
 
+    console.log(`✅ 총 ${imageUrls.length}개 이미지 업로드 완료`);
     res.status(200).json({ imageUrls });
   } catch (error) {
     console.error("❌ 다중 업로드 실패:", error);
@@ -106,6 +110,7 @@ router.post("/", upload.single("image"), async (req, res) => {
     let imageUrl;
 
     if (isCloudinaryEnabled) {
+      // ☁️ Cloudinary 업로드 (stream 방식)
       const result = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           { folder: "shop-products" },
@@ -118,7 +123,9 @@ router.post("/", upload.single("image"), async (req, res) => {
       });
 
       imageUrl = result.secure_url;
+      console.log("✅ 단일 Cloudinary 업로드 완료:", imageUrl);
     } else {
+      // 💾 로컬 업로드
       const filename = `${Date.now()}-${req.file.originalname
         .replace(/\s+/g, "_")
         .replace(/[^\w가-힣._-]/g, "")}`;
@@ -131,9 +138,9 @@ router.post("/", upload.single("image"), async (req, res) => {
         (host?.includes("localhost") ? "http" : "https");
 
       imageUrl = `${protocol}://${host}/uploads/${filename}`;
+      console.log("✅ 단일 로컬 업로드 완료:", imageUrl);
     }
 
-    console.log("✅ 단일 업로드 완료:", imageUrl);
     res.status(200).json({ imageUrl });
   } catch (error) {
     console.error("❌ 단일 업로드 실패:", error);
