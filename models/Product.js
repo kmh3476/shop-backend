@@ -18,10 +18,15 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: "https://placehold.co/250x200?text=No+Image",
     },
+
+    // ✅ 대표 이미지 필드 추가 (상품목록에 표시될 대표 이미지)
+    mainImage: {
+      type: String,
+      default: "https://placehold.co/250x200?text=No+Image",
+    },
   },
   { timestamps: true } // ✅ createdAt, updatedAt 자동 생성
 );
 
 const Product = mongoose.model("Product", productSchema);
-
 export default Product;

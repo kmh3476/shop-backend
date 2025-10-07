@@ -29,24 +29,29 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ✅ 상품 추가 (여러 장 이미지 포함)
+// ✅ 상품 추가 (여러 장 + 대표 이미지 포함)
 router.post("/", async (req, res) => {
   try {
-    const { name, price, description, imageUrl, images } = req.body;
+    const { name, price, description, imageUrl, images, mainImage } = req.body;
 
     if (!name || !price) {
       return res.status(400).json({ error: "상품명과 가격은 필수입니다." });
     }
 
+    // ✅ 이미지 정리
+    const imageArray =
+      Array.isArray(images) && images.length > 0
+        ? images
+        : [imageUrl?.trim() || "https://placehold.co/250x200?text=No+Image"];
+
     const newProduct = new Product({
       name,
       price,
       description,
-      image: imageUrl?.trim() || "https://placehold.co/250x200?text=No+Image",
-      // ✅ 여러 이미지가 전달된 경우 저장 (없으면 단일 이미지만)
-      images: Array.isArray(images) && images.length > 0
-        ? images
-        : [imageUrl?.trim() || "https://placehold.co/250x200?text=No+Image"],
+      image: imageUrl?.trim() || imageArray[0],
+      images: imageArray,
+      // ✅ 대표 이미지(mainImage) 지정 (없으면 첫 번째 이미지)
+      mainImage: mainImage?.trim() || imageArray[0],
     });
 
     await newProduct.save();
@@ -57,29 +62,36 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ 상품 수정 (여러 장 이미지 변경 가능)
+// ✅ 상품 수정 (여러 장 + 대표 이미지 변경 가능)
 router.put("/:id", async (req, res) => {
   try {
-    const { name, price, description, imageUrl, images } = req.body;
+    const { name, price, description, imageUrl, images, mainImage } = req.body;
     const product = await Product.findById(req.params.id);
 
     if (!product) {
       return res.status(404).json({ error: "상품을 찾을 수 없습니다." });
     }
 
-    // ✅ 전달된 데이터만 업데이트
+    // ✅ 필드 업데이트
     if (name) product.name = name;
     if (price) product.price = price;
     if (description) product.description = description;
-
-    // ✅ 단일 이미지 업데이트
     if (imageUrl) product.image = imageUrl;
 
-    // ✅ 여러 장 이미지 업데이트 (배열일 경우만)
+    // ✅ 여러 장 이미지
     if (Array.isArray(images)) {
-      product.images = images.length > 0
-        ? images
-        : [product.image || "https://placehold.co/250x200?text=No+Image"];
+      product.images =
+        images.length > 0
+          ? images
+          : [product.image || "https://placehold.co/250x200?text=No+Image"];
+    }
+
+    // ✅ 대표 이미지 변경
+    if (mainImage) {
+      product.mainImage = mainImage;
+    } else if (!product.mainImage && product.images?.length > 0) {
+      // 대표 이미지가 비어있으면 자동으로 첫 이미지 설정
+      product.mainImage = product.images[0];
     }
 
     const updated = await product.save();
