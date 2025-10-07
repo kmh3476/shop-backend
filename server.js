@@ -7,6 +7,10 @@ import path from "path";
 import uploadRouter from "./routes/upload.js";
 import productRoutes from "./routes/productRoutes.js";
 
+// ✅ 새로 추가
+import reviewRoutes from "./routes/reviewRoutes.js";
+import inquiryRoutes from "./routes/inquiryRoutes.js";
+
 dotenv.config();
 const app = express();
 
@@ -69,6 +73,10 @@ app.get("/", (req, res) => {
 // ✅ 실제 API 라우트
 app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRoutes);
+
+// ✅ 새로 추가된 라우트 (리뷰 & 문의)
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/inquiries", inquiryRoutes);
 
 // ✅ Render용 포트 설정
 const PORT = process.env.PORT || 4000;
