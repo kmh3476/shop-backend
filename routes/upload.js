@@ -50,9 +50,8 @@ router.post("/multi", upload.array("image", 10), async (req, res) => {
   }
 
   try {
-    const imageUrls = [];
-
-    for (const file of req.files) {
+    // ✅ 병렬 업로드 (Cloudinary or Local)
+    const uploadTasks = req.files.map(async (file) => {
       let imageUrl;
 
       if (isCloudinaryEnabled) {
@@ -84,7 +83,17 @@ router.post("/multi", upload.array("image", 10), async (req, res) => {
         imageUrl = `${protocol}://${host}/uploads/${filename}`;
       }
 
-      imageUrls.push(imageUrl);
+      return imageUrl;
+    });
+
+    // ✅ 모든 업로드 병렬 처리
+    const results = await Promise.allSettled(uploadTasks);
+    const imageUrls = results
+      .filter((r) => r.status === "fulfilled")
+      .map((r) => r.value);
+
+    if (imageUrls.length === 0) {
+      throw new Error("No images uploaded successfully");
     }
 
     console.log(`✅ ${imageUrls.length}개 이미지 업로드 완료`);
@@ -96,7 +105,7 @@ router.post("/multi", upload.array("image", 10), async (req, res) => {
 });
 
 /* --------------------------------------------------------
- ✅ (2) 기존 단일 업로드 (호환용, 그대로 유지)
+ ✅ (2) 단일 업로드 (기존 호환 유지)
 -------------------------------------------------------- */
 router.post("/", upload.single("image"), async (req, res) => {
   if (!req.file) {
@@ -107,7 +116,7 @@ router.post("/", upload.single("image"), async (req, res) => {
     let imageUrl;
 
     if (isCloudinaryEnabled) {
-      // ☁️ Cloudinary 업로드 (stream 기반 - Render 호환)
+      // ☁️ Cloudinary 업로드 (stream 기반)
       const result = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           { folder: "shop-products" },
