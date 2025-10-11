@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 // ✅ User 스키마 정의
 const userSchema = new mongoose.Schema(
