@@ -6,30 +6,30 @@ import dotenv from "dotenv";
 import path from "path";
 import uploadRouter from "./routes/upload.js";
 import productRoutes from "./routes/productRoutes.js";
-
-// ✅ 새로 추가된 라우트
 import reviewRoutes from "./routes/reviewRoutes.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
+import authRoutes from "./routes/auth.js"; // ✅ 회원 인증 라우트
 
 dotenv.config();
 const app = express();
 
-// ✅ 허용할 Origin 목록
-const allowedOrigins = [
-  "http://localhost:5173",            // 로컬 개발용
-  "https://project-onyou.vercel.app", // Vercel 배포 프론트엔드
-];
+// ✅ 허용할 Origin 목록 (.env에서 불러오거나 기본값 사용)
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : [
+      "http://localhost:5173",            // 로컬 개발용
+      "https://project-onyou.vercel.app", // Vercel 배포 프론트엔드
+    ];
 
 // ✅ CORS 설정 (Render + Vercel 완전 대응)
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // Postman 등 내부 요청 허용
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-
-      // ✅ https:// 뒤에 www가 붙거나 슬래시가 붙는 경우도 허용
       const normalized = origin.replace(/\/$/, "");
-      const allowed = allowedOrigins.some((o) => normalized.includes(o.replace(/https?:\/\//, "")));
+      const allowed = allowedOrigins.some((o) =>
+        normalized.includes(o.replace(/https?:\/\//, ""))
+      );
 
       if (allowed) callback(null, true);
       else {
@@ -73,6 +73,7 @@ app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/inquiries", inquiryRoutes);
+app.use("/api/auth", authRoutes); // ✅ 경로 수정: 더 일반적인 REST 규칙 (users → auth)
 
 // ✅ Render용 포트 설정
 const PORT = process.env.PORT || 4000;
