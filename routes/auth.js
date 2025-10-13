@@ -22,7 +22,7 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "이미 가입된 이메일입니다." });
     }
 
-    // ✅ (수정됨) 여기서 비밀번호 해싱하지 않음 — User 모델의 pre('save')가 처리함
+    // ✅ User 모델의 pre('save')가 비밀번호를 해싱 처리함
     const newUser = await User.create({
       name,
       email,
@@ -37,7 +37,7 @@ router.post("/signup", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    // 6️⃣ 응답
+    // 6️⃣ 응답 (관리자 여부 포함)
     res.status(201).json({
       message: "회원가입 성공",
       token,
@@ -45,6 +45,7 @@ router.post("/signup", async (req, res) => {
         id: newUser._id,
         name: newUser.name,
         email: newUser.email,
+        isAdmin: newUser.isAdmin, // ✅ 관리자 여부 포함
       },
     });
   } catch (err) {
@@ -84,7 +85,7 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    // 5️⃣ 응답
+    // 5️⃣ 응답 (관리자 여부 포함)
     res.json({
       message: "로그인 성공",
       token,
@@ -92,6 +93,7 @@ router.post("/login", async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        isAdmin: user.isAdmin, // ✅ 관리자 여부 추가
       },
     });
   } catch (err) {

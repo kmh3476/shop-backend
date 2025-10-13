@@ -9,6 +9,8 @@ import productRoutes from "./routes/productRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
 import authRoutes from "./routes/auth.js"; // ✅ 회원 인증 라우트
+import adminRoutes from "./routes/admin.js"; // ✅ 관리자 라우트 추가
+import { protect, adminOnly } from "./middleware/authMiddleware.js"; // ✅ 보호 미들웨어 불러오기
 
 dotenv.config();
 const app = express();
@@ -73,7 +75,8 @@ app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/inquiries", inquiryRoutes);
-app.use("/api/auth", authRoutes); // ✅ 경로 수정: 더 일반적인 REST 규칙 (users → auth)
+app.use("/api/auth", authRoutes); // ✅ 인증 라우트
+app.use("/api/admin", protect, adminOnly, adminRoutes); // ✅ 관리자 전용 보호 라우트
 
 // ✅ Render용 포트 설정
 const PORT = process.env.PORT || 4000;
