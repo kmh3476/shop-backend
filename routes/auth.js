@@ -1,4 +1,3 @@
-// 📁 server/routes/auth.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -13,28 +12,24 @@ router.post("/signup", async (req, res) => {
   try {
     const { userId, nickname, name, email, password, phone } = req.body;
 
-    // 1️⃣ 필수값 검증
     if (!userId || !nickname || !name || !email || !password || !phone) {
       return res.status(400).json({ message: "모든 필수 정보를 입력해주세요." });
     }
 
-    // 2️⃣ 중복 확인 (아이디, 닉네임, 이메일)
+    // 중복 확인
     const existingUserId = await User.findOne({ userId });
-    if (existingUserId) {
+    if (existingUserId)
       return res.status(400).json({ message: "이미 존재하는 아이디입니다." });
-    }
 
     const existingNickname = await User.findOne({ nickname });
-    if (existingNickname) {
+    if (existingNickname)
       return res.status(400).json({ message: "이미 사용 중인 닉네임입니다." });
-    }
 
     const existingEmail = await User.findOne({ email });
-    if (existingEmail) {
+    if (existingEmail)
       return res.status(400).json({ message: "이미 가입된 이메일입니다." });
-    }
 
-    // 3️⃣ User 모델의 pre('save')가 비밀번호 해싱 자동 처리
+    // 회원 생성
     const newUser = await User.create({
       userId,
       nickname,
@@ -42,18 +37,15 @@ router.post("/signup", async (req, res) => {
       email,
       password,
       phone,
-      emailVerified: false,
-      phoneVerified: false,
+      emailVerified: false, // 이메일 인증용 필드 (나중에 사용할 수 있음)
     });
 
-    // 4️⃣ JWT 발급
     const token = jwt.sign(
       { id: newUser._id, email: newUser.email, isAdmin: newUser.isAdmin },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    // 5️⃣ 응답
     res.status(201).json({
       message: "회원가입 성공",
       token,
@@ -66,7 +58,6 @@ router.post("/signup", async (req, res) => {
         phone: newUser.phone,
         isAdmin: newUser.isAdmin,
         emailVerified: newUser.emailVerified,
-        phoneVerified: newUser.phoneVerified,
       },
     });
   } catch (err) {
@@ -93,14 +84,6 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "존재하지 않는 계정입니다." });
     }
 
-    if (!user.emailVerified) {
-      return res.status(400).json({ message: "이메일 인증이 필요합니다." });
-    }
-
-    if (!user.phoneVerified) {
-      return res.status(400).json({ message: "휴대폰 인증이 필요합니다." });
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "비밀번호가 틀립니다." });
@@ -123,8 +106,6 @@ router.post("/login", async (req, res) => {
         email: user.email,
         phone: user.phone,
         isAdmin: user.isAdmin,
-        emailVerified: user.emailVerified,
-        phoneVerified: user.phoneVerified,
       },
     });
   } catch (err) {
@@ -133,22 +114,52 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 비밀번호 재설정 요청 -------------------- */
-router.post("/forgot", async (req, res) => {
+/* -------------------- ✅ 아이디 찾기 -------------------- */
+router.post("/find-id", async (req, res) => {
   try {
     const { email } = req.body;
+    if (!email)
+      return res.status(400).json({ message: "이메일을 입력해주세요." });
+
     const user = await User.findOne({ email });
-
     if (!user)
-      return res.status(400).json({ message: "등록되지 않은 이메일입니다." });
+      return res.status(400).json({ message: "등록된 이메일이 없습니다." });
 
-    // 1️⃣ 토큰 생성
+    // 아이디 일부 마스킹 (앞 2글자 + 뒤 2글자만 표시)
+    const maskedId = user.userId.replace(/(?<=^.{2}).(?=.{2}$)/g, "*");
+
+    res.json({
+      message: "아이디를 찾았습니다.",
+      userId: maskedId,
+    });
+  } catch (err) {
+    console.error("아이디 찾기 오류:", err);
+    res.status(500).json({ message: "서버 오류가 발생했습니다." });
+  }
+});
+
+/* -------------------- ✅ 비밀번호 재설정 링크 발송 -------------------- */
+router.post("/forgot", async (req, res) => {
+  try {
+    const { userId, email } = req.body;
+
+    if (!userId || !email) {
+      return res
+        .status(400)
+        .json({ message: "아이디와 이메일을 모두 입력해주세요." });
+    }
+
+    const user = await User.findOne({ userId, email });
+    if (!user)
+      return res
+        .status(400)
+        .json({ message: "입력한 아이디와 이메일이 일치하지 않습니다." });
+
+    // 비밀번호 재설정 토큰 생성
     const resetToken = crypto.randomBytes(20).toString("hex");
-
-    // 2️⃣ 링크 생성 (프론트엔드 경로 연결)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // 3️⃣ 이메일 전송 설정
+    // Gmail SMTP 설정
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -163,23 +174,23 @@ router.post("/forgot", async (req, res) => {
       subject: "🔐 비밀번호 재설정 안내",
       html: `
         <h2>비밀번호 재설정 요청</h2>
-        <p>아래 링크를 클릭하여 비밀번호를 재설정하세요. 링크는 30분 동안 유효합니다.</p>
+        <p>아래 링크를 클릭하여 비밀번호를 재설정하세요.</p>
         <a href="${resetLink}" style="color:#007bff;">비밀번호 재설정하기</a>
+        <p>이 링크는 30분 동안 유효합니다.</p>
         <p>만약 본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.</p>
       `,
     };
 
-    // 4️⃣ 이메일 발송
     await transporter.sendMail(mailOptions);
 
-    console.log(`✅ 비밀번호 재설정 링크 전송: ${resetLink}`);
+    console.log(`✅ 비밀번호 재설정 링크 전송됨: ${resetLink}`);
 
-    // ⚙️ (선택) 토큰을 DB에 저장해 실제 검증 시 사용할 수 있음
+    // (선택) DB에 토큰 저장하여 실제 재설정 시 검증 가능
     // user.resetToken = resetToken;
     // user.resetTokenExpire = Date.now() + 30 * 60 * 1000;
     // await user.save();
 
-    res.json({ message: "비밀번호 재설정 링크를 이메일로 보냈습니다." });
+    res.json({ message: "비밀번호 재설정 링크를 이메일로 전송했습니다." });
   } catch (err) {
     console.error("비밀번호 재설정 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
