@@ -1,4 +1,3 @@
-// 📁 server/routes/auth.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -7,6 +6,73 @@ import nodemailer from "nodemailer";
 import User from "../models/User.js";
 
 const router = express.Router();
+
+/* -------------------- ✅ 아이디/닉네임/이메일 중복 확인 -------------------- */
+router.post("/check-id", async (req, res) => {
+  try {
+    const { userId, nickname, email } = req.body;
+
+    if (userId) {
+      const exists = await User.findOne({ userId });
+      return res.json({ exists: !!exists });
+    }
+
+    if (nickname) {
+      const exists = await User.findOne({ nickname });
+      return res.json({ exists: !!exists });
+    }
+
+    if (email) {
+      const exists = await User.findOne({ email });
+      return res.json({ exists: !!exists });
+    }
+
+    res.status(400).json({ message: "확인할 값이 없습니다." });
+  } catch (err) {
+    console.error("중복 확인 오류:", err);
+    res.status(500).json({ message: "서버 오류" });
+  }
+});
+
+/* -------------------- ✅ 이메일 인증 코드 전송 -------------------- */
+router.post("/send-email-code", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "이메일을 입력해주세요." });
+
+    const exists = await User.findOne({ email });
+    if (exists)
+      return res.status(400).json({ message: "이미 가입된 이메일입니다." });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `"Shop Support" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "📧 이메일 인증 코드",
+      html: `
+        <h3>이메일 인증 코드</h3>
+        <p>아래 인증 코드를 입력해주세요:</p>
+        <h2>${code}</h2>
+        <p>이 코드는 10분 동안만 유효합니다.</p>
+      `,
+    });
+
+    console.log(`✅ 인증 코드 전송됨: ${email}, 코드: ${code}`);
+    res.json({ success: true, code });
+  } catch (err) {
+    console.error("이메일 전송 오류:", err);
+    res.status(500).json({ message: "이메일 전송 실패" });
+  }
+});
 
 /* -------------------- ✅ 회원가입 -------------------- */
 router.post("/signup", async (req, res) => {
@@ -93,7 +159,7 @@ router.get("/verify-email/:token", async (req, res) => {
       return res.status(400).send("잘못되었거나 만료된 이메일 인증 링크입니다.");
 
     user.emailVerified = true;
-    user.emailToken = null; // 토큰 제거
+    user.emailToken = null;
     await user.save();
 
     res.send("<h2>✅ 이메일 인증이 완료되었습니다! 로그인해주세요.</h2>");
@@ -115,9 +181,7 @@ router.post("/login", async (req, res) => {
     }
 
     const user = await User.findOne({ $or: [{ email }, { userId }] });
-    if (!user) {
-      return res.status(400).json({ message: "존재하지 않는 계정입니다." });
-    }
+    if (!user) return res.status(400).json({ message: "존재하지 않는 계정입니다." });
 
     if (!user.emailVerified) {
       return res
@@ -167,11 +231,7 @@ router.post("/find-id", async (req, res) => {
       return res.status(400).json({ message: "등록된 이메일이 없습니다." });
 
     const maskedId = user.userId.replace(/(?<=^.{2}).(?=.{2}$)/g, "*");
-
-    res.json({
-      message: "아이디를 찾았습니다.",
-      userId: maskedId,
-    });
+    res.json({ message: "아이디를 찾았습니다.", userId: maskedId });
   } catch (err) {
     console.error("아이디 찾기 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
