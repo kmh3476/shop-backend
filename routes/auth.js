@@ -13,7 +13,7 @@ router.post("/signup", async (req, res) => {
   try {
     const { userId, nickname, name, email, password, phone } = req.body;
 
-    if (!userId || !nickname || !name || !email || !password || !phone) {
+    if (!userId || !nickname || !name || !email || !password) {
       return res.status(400).json({ message: "모든 필수 정보를 입력해주세요." });
     }
 
