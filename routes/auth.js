@@ -3,10 +3,11 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+import { Resend } from "resend"; // ✅ Resend API 추가
 import User from "../models/User.js";
 
 const router = express.Router();
+const resend = new Resend(process.env.RESEND_API_KEY); // ✅ API 키 설정
 
 // ✅ 임시로 이메일 인증 코드를 저장할 메모리 (Redis로 대체 가능)
 const emailVerificationCodes = new Map();
@@ -36,7 +37,7 @@ router.post("/check-id", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 이메일 인증 코드 전송 -------------------- */
+/* -------------------- ✅ 이메일 인증 코드 전송 (Resend 버전) -------------------- */
 router.post("/send-email-code", async (req, res) => {
   try {
     const { email } = req.body;
@@ -56,17 +57,9 @@ router.post("/send-email-code", async (req, res) => {
       expires: Date.now() + 10 * 60 * 1000,
     });
 
-    // ✅ Gmail SMTP 설정 (앱 비밀번호 필요)
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"Shop Support" <${process.env.SMTP_USER}>`,
+    // ✅ Resend API로 이메일 발송
+    await resend.emails.send({
+      from: "Shop Onyou <no-reply@onyou.shop>", // ✅ 도메인에 맞게 변경 가능
       to: email,
       subject: "📧 이메일 인증 코드",
       html: `
@@ -80,8 +73,10 @@ router.post("/send-email-code", async (req, res) => {
     console.log(`✅ 인증 코드 전송됨: ${email}, 코드: ${code}`);
     res.json({ success: true, message: "인증 코드가 이메일로 전송되었습니다." });
   } catch (err) {
-    console.error("이메일 전송 오류:", err);
-    res.status(500).json({ message: "이메일 전송 실패: " + err.message });
+    console.error("Resend 이메일 전송 오류:", err);
+    res
+      .status(500)
+      .json({ message: "이메일 전송 실패: " + (err.message || "Resend 오류") });
   }
 });
 
@@ -93,7 +88,6 @@ router.post("/verify-email-code", async (req, res) => {
       return res.status(400).json({ message: "이메일과 인증 코드를 입력해주세요." });
 
     const record = emailVerificationCodes.get(email);
-
     if (!record)
       return res.status(400).json({ message: "인증 코드가 존재하지 않습니다." });
 
@@ -105,7 +99,7 @@ router.post("/verify-email-code", async (req, res) => {
     if (record.code !== code)
       return res.status(400).json({ message: "인증 코드가 올바르지 않습니다." });
 
-    emailVerificationCodes.delete(email); // ✅ 사용 후 제거
+    emailVerificationCodes.delete(email);
     res.json({ success: true, message: "이메일 인증이 완료되었습니다." });
   } catch (err) {
     console.error("인증 코드 검증 오류:", err);
@@ -118,7 +112,6 @@ router.post("/signup", async (req, res) => {
   try {
     const { userId, nickname, email, password, emailVerified } = req.body;
 
-    // ✅ name 제거 (프론트에 없음)
     if (!userId || !nickname || !email || !password)
       return res.status(400).json({ message: "모든 필수 정보를 입력해주세요." });
 
@@ -205,72 +198,6 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("로그인 오류:", err);
-    res.status(500).json({ message: "서버 오류가 발생했습니다." });
-  }
-});
-
-/* -------------------- ✅ 아이디 찾기 -------------------- */
-router.post("/find-id", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email)
-      return res.status(400).json({ message: "이메일을 입력해주세요." });
-
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(400).json({ message: "등록된 이메일이 없습니다." });
-
-    const maskedId = user.userId.replace(/(?<=^.{2}).(?=.{2}$)/g, "*");
-    res.json({ message: "아이디를 찾았습니다.", userId: maskedId });
-  } catch (err) {
-    console.error("아이디 찾기 오류:", err);
-    res.status(500).json({ message: "서버 오류가 발생했습니다." });
-  }
-});
-
-/* -------------------- ✅ 비밀번호 재설정 링크 발송 -------------------- */
-router.post("/forgot", async (req, res) => {
-  try {
-    const { userId, email } = req.body;
-
-    if (!userId || !email)
-      return res.status(400).json({ message: "아이디와 이메일을 모두 입력해주세요." });
-
-    const user = await User.findOne({ userId, email });
-    if (!user)
-      return res.status(400).json({ message: "입력한 아이디와 이메일이 일치하지 않습니다." });
-
-    const resetToken = crypto.randomBytes(20).toString("hex");
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"Shop Support" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "🔐 비밀번호 재설정 안내",
-      html: `
-        <h2>비밀번호 재설정 요청</h2>
-        <p>아래 버튼을 눌러 새 비밀번호를 설정하세요.</p>
-        <a href="${resetLink}"
-           style="display:inline-block;background:#007bff;color:white;
-           padding:10px 20px;border-radius:5px;text-decoration:none;">
-           비밀번호 재설정하기
-        </a>
-        <p>이 링크는 30분 동안 유효합니다.</p>
-      `,
-    });
-
-    console.log(`✅ 비밀번호 재설정 링크 전송됨: ${resetLink}`);
-    res.json({ message: "비밀번호 재설정 링크를 이메일로 전송했습니다." });
-  } catch (err) {
-    console.error("비밀번호 재설정 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
   }
 });
