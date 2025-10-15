@@ -1,3 +1,4 @@
+// 📁 server/routes/auth.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -29,7 +30,11 @@ router.post("/signup", async (req, res) => {
     if (existingEmail)
       return res.status(400).json({ message: "이미 가입된 이메일입니다." });
 
-    // 회원 생성
+    // ✅ 이메일 인증 토큰 생성
+    const emailToken = crypto.randomBytes(20).toString("hex");
+    const verifyLink = `${process.env.FRONTEND_URL}/verify-email/${emailToken}`;
+
+    // 회원 생성 (이메일 인증 전)
     const newUser = await User.create({
       userId,
       nickname,
@@ -37,32 +42,64 @@ router.post("/signup", async (req, res) => {
       email,
       password,
       phone,
-      emailVerified: false, // 이메일 인증용 필드 (나중에 사용할 수 있음)
+      emailVerified: false,
+      emailToken,
     });
 
-    const token = jwt.sign(
-      { id: newUser._id, email: newUser.email, isAdmin: newUser.isAdmin },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
+    // ✅ 인증 메일 발송
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: `"Shop Support" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "📧 이메일 인증 요청",
+      html: `
+        <h2>이메일 인증 요청</h2>
+        <p>${name}님, 회원가입을 완료하려면 아래 버튼을 클릭해주세요.</p>
+        <a href="${verifyLink}" 
+          style="display:inline-block;margin-top:10px;padding:10px 20px;
+          background:#007bff;color:white;border-radius:5px;text-decoration:none;">
+          이메일 인증하기
+        </a>
+        <p>이 링크는 30분 동안만 유효합니다.</p>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ 이메일 인증 링크 전송됨: ${verifyLink}`);
 
     res.status(201).json({
-      message: "회원가입 성공",
-      token,
-      user: {
-        id: newUser._id,
-        userId: newUser.userId,
-        nickname: newUser.nickname,
-        name: newUser.name,
-        email: newUser.email,
-        phone: newUser.phone,
-        isAdmin: newUser.isAdmin,
-        emailVerified: newUser.emailVerified,
-      },
+      message: "회원가입 성공! 이메일 인증 링크를 확인해주세요.",
     });
   } catch (err) {
     console.error("회원가입 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
+  }
+});
+
+/* -------------------- ✅ 이메일 인증 처리 -------------------- */
+router.get("/verify-email/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const user = await User.findOne({ emailToken: token });
+
+    if (!user)
+      return res.status(400).send("잘못되었거나 만료된 이메일 인증 링크입니다.");
+
+    user.emailVerified = true;
+    user.emailToken = null; // 토큰 제거
+    await user.save();
+
+    res.send("<h2>✅ 이메일 인증이 완료되었습니다! 로그인해주세요.</h2>");
+  } catch (err) {
+    console.error("이메일 인증 오류:", err);
+    res.status(500).send("서버 오류가 발생했습니다.");
   }
 });
 
@@ -77,11 +114,15 @@ router.post("/login", async (req, res) => {
         .json({ message: "아이디(또는 이메일)와 비밀번호를 입력해주세요." });
     }
 
-    const user = await User.findOne({
-      $or: [{ email }, { userId }],
-    });
+    const user = await User.findOne({ $or: [{ email }, { userId }] });
     if (!user) {
       return res.status(400).json({ message: "존재하지 않는 계정입니다." });
+    }
+
+    if (!user.emailVerified) {
+      return res
+        .status(400)
+        .json({ message: "이메일 인증 후 로그인할 수 있습니다." });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -125,7 +166,6 @@ router.post("/find-id", async (req, res) => {
     if (!user)
       return res.status(400).json({ message: "등록된 이메일이 없습니다." });
 
-    // 아이디 일부 마스킹 (앞 2글자 + 뒤 2글자만 표시)
     const maskedId = user.userId.replace(/(?<=^.{2}).(?=.{2}$)/g, "*");
 
     res.json({
@@ -155,16 +195,14 @@ router.post("/forgot", async (req, res) => {
         .status(400)
         .json({ message: "입력한 아이디와 이메일이 일치하지 않습니다." });
 
-    // 비밀번호 재설정 토큰 생성
     const resetToken = crypto.randomBytes(20).toString("hex");
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // Gmail SMTP 설정
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: process.env.SMTP_USER, // Gmail 계정
-        pass: process.env.SMTP_PASS, // 앱 비밀번호
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
     });
 
@@ -174,22 +212,19 @@ router.post("/forgot", async (req, res) => {
       subject: "🔐 비밀번호 재설정 안내",
       html: `
         <h2>비밀번호 재설정 요청</h2>
-        <p>아래 링크를 클릭하여 비밀번호를 재설정하세요.</p>
-        <a href="${resetLink}" style="color:#007bff;">비밀번호 재설정하기</a>
+        <p>아래 버튼을 눌러 새 비밀번호를 설정하세요.</p>
+        <a href="${resetLink}" 
+           style="display:inline-block;background:#007bff;color:white;
+           padding:10px 20px;border-radius:5px;text-decoration:none;">
+           비밀번호 재설정하기
+        </a>
         <p>이 링크는 30분 동안 유효합니다.</p>
-        <p>만약 본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.</p>
       `,
     };
 
     await transporter.sendMail(mailOptions);
 
     console.log(`✅ 비밀번호 재설정 링크 전송됨: ${resetLink}`);
-
-    // (선택) DB에 토큰 저장하여 실제 재설정 시 검증 가능
-    // user.resetToken = resetToken;
-    // user.resetTokenExpire = Date.now() + 30 * 60 * 1000;
-    // await user.save();
-
     res.json({ message: "비밀번호 재설정 링크를 이메일로 전송했습니다." });
   } catch (err) {
     console.error("비밀번호 재설정 오류:", err);
