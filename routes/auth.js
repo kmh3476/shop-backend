@@ -56,6 +56,7 @@ router.post("/send-email-code", async (req, res) => {
       expires: Date.now() + 10 * 60 * 1000,
     });
 
+    // ✅ Gmail SMTP 설정 (앱 비밀번호 필요)
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -71,7 +72,7 @@ router.post("/send-email-code", async (req, res) => {
       html: `
         <h3>이메일 인증 코드</h3>
         <p>회원가입을 완료하려면 아래 인증 코드를 입력해주세요.</p>
-        <h2 style="font-size:28px;letter-spacing:4px;">${code}</h2>
+        <h2 style="font-size:28px;letter-spacing:4px;color:#007bff;">${code}</h2>
         <p>이 코드는 10분 동안만 유효합니다.</p>
       `,
     });
@@ -80,7 +81,7 @@ router.post("/send-email-code", async (req, res) => {
     res.json({ success: true, message: "인증 코드가 이메일로 전송되었습니다." });
   } catch (err) {
     console.error("이메일 전송 오류:", err);
-    res.status(500).json({ message: "이메일 전송 실패" });
+    res.status(500).json({ message: "이메일 전송 실패: " + err.message });
   }
 });
 
@@ -104,7 +105,7 @@ router.post("/verify-email-code", async (req, res) => {
     if (record.code !== code)
       return res.status(400).json({ message: "인증 코드가 올바르지 않습니다." });
 
-    emailVerificationCodes.delete(email); // 사용 후 제거
+    emailVerificationCodes.delete(email); // ✅ 사용 후 제거
     res.json({ success: true, message: "이메일 인증이 완료되었습니다." });
   } catch (err) {
     console.error("인증 코드 검증 오류:", err);
@@ -115,9 +116,10 @@ router.post("/verify-email-code", async (req, res) => {
 /* -------------------- ✅ 회원가입 -------------------- */
 router.post("/signup", async (req, res) => {
   try {
-    const { userId, nickname, name, email, password, emailVerified } = req.body;
+    const { userId, nickname, email, password, emailVerified } = req.body;
 
-    if (!userId || !nickname || !name || !email || !password)
+    // ✅ name 제거 (프론트에 없음)
+    if (!userId || !nickname || !email || !password)
       return res.status(400).json({ message: "모든 필수 정보를 입력해주세요." });
 
     if (!emailVerified)
@@ -138,7 +140,6 @@ router.post("/signup", async (req, res) => {
     const newUser = await User.create({
       userId,
       nickname,
-      name,
       email,
       password,
       emailVerified: true,
@@ -157,7 +158,6 @@ router.post("/signup", async (req, res) => {
         id: newUser._id,
         userId: newUser.userId,
         nickname: newUser.nickname,
-        name: newUser.name,
         email: newUser.email,
       },
     });
@@ -199,7 +199,6 @@ router.post("/login", async (req, res) => {
         id: user._id,
         userId: user.userId,
         nickname: user.nickname,
-        name: user.name,
         email: user.email,
         isAdmin: user.isAdmin,
       },
