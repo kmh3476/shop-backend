@@ -9,8 +9,8 @@ import uploadRouter from "./routes/upload.js";
 import productRoutes from "./routes/productRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
-import authRoutes from "./routes/auth.js";     // ✅ 회원 인증 라우트
-import adminRoutes from "./routes/admin.js";   // ✅ 관리자 라우트
+import authRoutes from "./routes/auth.js"; // ✅ 회원 인증 라우트
+import adminRoutes from "./routes/admin.js"; // ✅ 관리자 라우트
 import verifyRoutes from "./routes/verify.js"; // ✅ 이메일/휴대폰 인증 라우트
 
 import { protect, adminOnly } from "./middleware/authMiddleware.js";
@@ -24,15 +24,15 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : [
       "http://localhost:5173",
       "https://project-onyou.vercel.app", // ✅ Vercel 정식 도메인
+      "https://shop-backend-1-dfsl.onrender.com", // ✅ Render 백엔드 도메인
     ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // Postman 등 허용
+      if (!origin) return callback(null, true); // SSR, Postman 등 허용
 
       const allowed = allowedOrigins.some((o) => {
-        // https://project-onyou.vercel.app / project-onyou-git-main.vercel.app 모두 허용
         const base = o.replace(/https?:\/\//, "");
         return origin.includes(base);
       });
@@ -49,7 +49,7 @@ app.use(
   })
 );
 
-// ✅ preflight (OPTIONS) 요청 처리
+// ✅ preflight (OPTIONS) 요청 허용
 app.options("*", cors());
 
 /* -------------------- ✅ JSON 파싱 -------------------- */
@@ -84,13 +84,20 @@ app.use("/api/verify", verifyRoutes);
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
-// CORS 에러나 기타 에러가 발생했을 때 깔끔하게 JSON으로 반환
 app.use((err, req, res, next) => {
   console.error("🔥 서버 에러:", err.message);
+
   if (err.message.includes("CORS")) {
-    return res.status(403).json({ message: "CORS 정책에 의해 차단된 요청입니다." });
+    return res.status(403).json({
+      success: false,
+      message: "CORS 정책에 의해 차단된 요청입니다.",
+    });
   }
-  res.status(500).json({ message: "서버 내부 오류가 발생했습니다." });
+
+  res.status(500).json({
+    success: false,
+    message: "서버 내부 오류가 발생했습니다.",
+  });
 });
 
 /* -------------------- ✅ 서버 실행 -------------------- */
