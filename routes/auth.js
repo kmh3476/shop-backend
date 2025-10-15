@@ -59,7 +59,7 @@ router.post("/send-email-code", async (req, res) => {
 
     // ✅ Resend API로 이메일 발송
     await resend.emails.send({
-      from: "Shop Onyou <no-reply@onyou.shop>", // ✅ 도메인에 맞게 변경 가능
+      from: "Shop Onyou <no-reply@onlyonyou.p-e.kr>", // ✅ 도메인에 맞게 변경 가능
       to: email,
       subject: "📧 이메일 인증 코드",
       html: `
