@@ -130,14 +130,12 @@ router.post("/signup", async (req, res) => {
     if (existingEmail)
       return res.status(400).json({ message: "이미 가입된 이메일입니다." });
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
+    // ❌ bcrypt 해싱 제거 (User.js의 pre('save')가 자동 처리)
     const newUser = await User.create({
       userId,
       nickname,
       email,
-      password: hashedPassword,
+      password, // 평문으로 저장하면 pre('save')에서 자동 해싱됨
       emailVerified: true,
     });
 
