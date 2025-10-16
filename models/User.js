@@ -23,13 +23,6 @@ const userSchema = new mongoose.Schema(
       minlength: [2, "닉네임은 최소 2자 이상이어야 합니다."],
     },
 
-    // ✅ 이름
-    name: {
-      type: String,
-      required: [true, "이름은 필수입니다."],
-      trim: true,
-    },
-
     // ✅ 이메일 (로그인 / 인증용)
     email: {
       type: String,
@@ -47,7 +40,7 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "비밀번호는 최소 6자 이상이어야 합니다."],
     },
 
-    // ✅ 전화번호
+    // ✅ 전화번호 (선택)
     phone: {
       type: String,
       default: "",

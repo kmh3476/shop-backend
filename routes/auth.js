@@ -61,11 +61,13 @@ router.post("/send-email-code", async (req, res) => {
       to: [email],
       subject: "📧 이메일 인증 코드",
       html: `
-        <h3>이메일 인증 코드</h3>
-        <p>회원가입을 완료하려면 아래 인증 코드를 입력해주세요.</p>
-        <h2 style="font-size:28px;letter-spacing:4px;color:#007bff;">${code}</h2>
-        <p>이 코드는 10분 동안만 유효합니다.</p>
-      `,
+  <div style="font-family:Arial,sans-serif;line-height:1.6">
+    <h2>Shop Onyou 이메일 인증</h2>
+    <p>안녕하세요! 아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
+    <div style="font-size:22px;font-weight:bold;color:#007bff;">${code}</div>
+    <p>이 코드는 10분 동안만 유효합니다.<br/>감사합니다.<br/>- Onyou 팀</p>
+  </div>
+`
     });
 
     if (error) throw new Error(error.message);
