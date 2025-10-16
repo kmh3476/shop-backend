@@ -9,7 +9,7 @@ import User from "../models/User.js";
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY); // ✅ API 키 설정
 
-// ✅ 임시로 이메일 인증 코드를 저장할 메모리 (Redis로 대체 가능)
+// ✅ 임시 이메일 인증 코드 저장소 (Redis 대체 가능)
 const emailVerificationCodes = new Map();
 
 /* -------------------- ✅ 아이디/닉네임/이메일 중복 확인 -------------------- */
@@ -37,7 +37,7 @@ router.post("/check-id", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 이메일 인증 코드 전송 (Resend 버전) -------------------- */
+/* -------------------- ✅ 이메일 인증 코드 전송 (Resend) -------------------- */
 router.post("/send-email-code", async (req, res) => {
   try {
     const { email } = req.body;
@@ -51,16 +51,16 @@ router.post("/send-email-code", async (req, res) => {
     // 6자리 인증 코드 생성
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 10분간 유효한 코드 저장
+    // 10분 유효
     emailVerificationCodes.set(email, {
       code,
       expires: Date.now() + 10 * 60 * 1000,
     });
 
-    // ✅ Resend API로 이메일 발송
-    await resend.emails.send({
-      from: "Shop Onyou <no-reply@onlyonyou.p-e.kr>", // ✅ 도메인에 맞게 변경 가능
-      to: email,
+    // ✅ Resend로 이메일 발송
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_SENDER,
+      to: [email],
       subject: "📧 이메일 인증 코드",
       html: `
         <h3>이메일 인증 코드</h3>
@@ -70,13 +70,16 @@ router.post("/send-email-code", async (req, res) => {
       `,
     });
 
+    if (error) {
+      console.error("❌ Resend 이메일 전송 실패:", error);
+      return res.status(500).json({ message: "이메일 전송 실패: " + error.message });
+    }
+
     console.log(`✅ 인증 코드 전송됨: ${email}, 코드: ${code}`);
     res.json({ success: true, message: "인증 코드가 이메일로 전송되었습니다." });
   } catch (err) {
     console.error("Resend 이메일 전송 오류:", err);
-    res
-      .status(500)
-      .json({ message: "이메일 전송 실패: " + (err.message || "Resend 오류") });
+    res.status(500).json({ message: "이메일 전송 실패: " + err.message });
   }
 });
 
@@ -198,6 +201,50 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("로그인 오류:", err);
+    res.status(500).json({ message: "서버 오류가 발생했습니다." });
+  }
+});
+
+/* -------------------- ✅ 비밀번호 재설정 링크 발송 (Resend) -------------------- */
+router.post("/forgot", async (req, res) => {
+  try {
+    const { userId, email } = req.body;
+    if (!userId || !email)
+      return res.status(400).json({ message: "아이디와 이메일을 모두 입력해주세요." });
+
+    const user = await User.findOne({ userId, email });
+    if (!user)
+      return res.status(400).json({ message: "입력한 아이디와 이메일이 일치하지 않습니다." });
+
+    const resetToken = crypto.randomBytes(20).toString("hex");
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    // ✅ Resend로 비밀번호 재설정 이메일 발송
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_SENDER,
+      to: [email],
+      subject: "🔐 비밀번호 재설정 안내",
+      html: `
+        <h2>비밀번호 재설정 요청</h2>
+        <p>아래 버튼을 눌러 새 비밀번호를 설정하세요.</p>
+        <a href="${resetLink}"
+           style="display:inline-block;background:#007bff;color:white;
+           padding:10px 20px;border-radius:5px;text-decoration:none;">
+           비밀번호 재설정하기
+        </a>
+        <p>이 링크는 30분 동안 유효합니다.</p>
+      `,
+    });
+
+    if (error) {
+      console.error("❌ 비밀번호 재설정 이메일 전송 실패:", error);
+      return res.status(500).json({ message: "이메일 전송 실패: " + error.message });
+    }
+
+    console.log(`✅ 비밀번호 재설정 링크 전송됨: ${resetLink}`);
+    res.json({ message: "비밀번호 재설정 링크를 이메일로 전송했습니다." });
+  } catch (err) {
+    console.error("비밀번호 재설정 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
   }
 });
