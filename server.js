@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 
+// ✅ 라우트 불러오기
 import uploadRouter from "./routes/upload.js";
 import productRoutes from "./routes/productRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
@@ -12,6 +13,7 @@ import inquiryRoutes from "./routes/inquiryRoutes.js";
 import authRoutes from "./routes/auth.js"; // ✅ 회원 인증 라우트
 import adminRoutes from "./routes/admin.js"; // ✅ 관리자 라우트
 import verifyRoutes from "./routes/verify.js"; // ✅ 이메일/휴대폰 인증 라우트
+import supportRoutes from "./routes/support.js"; // ✅ 고객센터 문의 라우트 추가
 
 import { protect, adminOnly } from "./middleware/authMiddleware.js";
 
@@ -81,6 +83,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/verify", verifyRoutes);
+app.use("/api/support", supportRoutes); // ✅ 고객센터 라우트 추가
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
