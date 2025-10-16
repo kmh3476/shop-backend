@@ -53,7 +53,7 @@ router.post("/send-email-code", async (req, res) => {
       expires: Date.now() + 10 * 60 * 1000,
     });
 
-    // 만료된 코드 정리 (선택사항)
+    // 만료된 코드 자동 삭제
     setTimeout(() => emailVerificationCodes.delete(email), 10 * 60 * 1000);
 
     const { error } = await resend.emails.send({
@@ -61,16 +61,17 @@ router.post("/send-email-code", async (req, res) => {
       to: [email],
       subject: "📧 이메일 인증 코드",
       html: `
-  <div style="font-family:Arial,sans-serif;line-height:1.6">
-    <h2>Shop Onyou 이메일 인증</h2>
-    <p>안녕하세요! 아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
-    <div style="font-size:22px;font-weight:bold;color:#007bff;">${code}</div>
-    <p>이 코드는 10분 동안만 유효합니다.<br/>감사합니다.<br/>- Onyou 팀</p>
-  </div>
-`
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2>Shop Onyou 이메일 인증</h2>
+          <p>안녕하세요! 아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
+          <div style="font-size:22px;font-weight:bold;color:#007bff;">${code}</div>
+          <p>이 코드는 10분 동안만 유효합니다.<br/>감사합니다.<br/>- Onyou 팀</p>
+        </div>
+      `,
     });
 
     if (error) throw new Error(error.message);
+
     console.log(`✅ 인증 코드 전송됨: ${email}, 코드: ${code}`);
     res.json({ success: true, message: "인증 코드가 이메일로 전송되었습니다." });
   } catch (err) {
@@ -162,20 +163,29 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 로그인 -------------------- */
+/* -------------------- ✅ 로그인 (아이디 또는 이메일 둘 다 지원) -------------------- */
 router.post("/login", async (req, res) => {
   try {
     const { userId, email, password } = req.body;
+    const loginInput = email || userId;
 
-    if ((!email && !userId) || !password)
-      return res.status(400).json({ message: "아이디(또는 이메일)와 비밀번호를 입력해주세요." });
+    if (!loginInput || !password)
+      return res
+        .status(400)
+        .json({ message: "아이디(또는 이메일)와 비밀번호를 입력해주세요." });
 
-    const user = await User.findOne({ $or: [{ email }, { userId }] });
+    // 아이디 또는 이메일로 사용자 찾기
+    const user = await User.findOne({
+      $or: [{ email: loginInput }, { userId: loginInput }],
+    });
+
     if (!user)
       return res.status(400).json({ message: "존재하지 않는 계정입니다." });
 
     if (!user.emailVerified)
-      return res.status(400).json({ message: "이메일 인증 후 로그인할 수 있습니다." });
+      return res
+        .status(400)
+        .json({ message: "이메일 인증 후 로그인할 수 있습니다." });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
@@ -263,7 +273,9 @@ router.post("/reset-password", async (req, res) => {
     });
 
     if (!user)
-      return res.status(400).json({ message: "토큰이 유효하지 않거나 만료되었습니다." });
+      return res
+        .status(400)
+        .json({ message: "토큰이 유효하지 않거나 만료되었습니다." });
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
