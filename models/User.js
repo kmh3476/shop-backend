@@ -71,6 +71,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // ✅ 비밀번호 재설정용 토큰 (Resend 기반)
+    resetToken: {
+      type: String,
+      default: null,
+    },
+
+    // ✅ 토큰 만료 시간
+    resetExpires: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

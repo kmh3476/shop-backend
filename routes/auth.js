@@ -3,13 +3,11 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { Resend } from "resend"; // ✅ Resend API 추가
+import { Resend } from "resend";
 import User from "../models/User.js";
 
 const router = express.Router();
-const resend = new Resend(process.env.RESEND_API_KEY); // ✅ API 키 설정
-
-// ✅ 임시 이메일 인증 코드 저장소 (Redis 대체 가능)
+const resend = new Resend(process.env.RESEND_API_KEY);
 const emailVerificationCodes = new Map();
 
 /* -------------------- ✅ 아이디/닉네임/이메일 중복 확인 -------------------- */
@@ -48,17 +46,17 @@ router.post("/send-email-code", async (req, res) => {
     if (exists)
       return res.status(400).json({ message: "이미 가입된 이메일입니다." });
 
-    // 6자리 인증 코드 생성
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 10분 유효
     emailVerificationCodes.set(email, {
       code,
       expires: Date.now() + 10 * 60 * 1000,
     });
 
-    // ✅ Resend로 이메일 발송
-    const { data, error } = await resend.emails.send({
+    // 만료된 코드 정리 (선택사항)
+    setTimeout(() => emailVerificationCodes.delete(email), 10 * 60 * 1000);
+
+    const { error } = await resend.emails.send({
       from: process.env.EMAIL_SENDER,
       to: [email],
       subject: "📧 이메일 인증 코드",
@@ -70,11 +68,7 @@ router.post("/send-email-code", async (req, res) => {
       `,
     });
 
-    if (error) {
-      console.error("❌ Resend 이메일 전송 실패:", error);
-      return res.status(500).json({ message: "이메일 전송 실패: " + error.message });
-    }
-
+    if (error) throw new Error(error.message);
     console.log(`✅ 인증 코드 전송됨: ${email}, 코드: ${code}`);
     res.json({ success: true, message: "인증 코드가 이메일로 전송되었습니다." });
   } catch (err) {
@@ -133,11 +127,14 @@ router.post("/signup", async (req, res) => {
     if (existingEmail)
       return res.status(400).json({ message: "이미 가입된 이메일입니다." });
 
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const newUser = await User.create({
       userId,
       nickname,
       email,
-      password,
+      password: hashedPassword,
       emailVerified: true,
     });
 
@@ -217,10 +214,15 @@ router.post("/forgot", async (req, res) => {
       return res.status(400).json({ message: "입력한 아이디와 이메일이 일치하지 않습니다." });
 
     const resetToken = crypto.randomBytes(20).toString("hex");
+    const resetExpires = Date.now() + 30 * 60 * 1000; // 30분
+
+    user.resetToken = resetToken;
+    user.resetExpires = resetExpires;
+    await user.save();
+
     const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // ✅ Resend로 비밀번호 재설정 이메일 발송
-    const { data, error } = await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: process.env.EMAIL_SENDER,
       to: [email],
       subject: "🔐 비밀번호 재설정 안내",
@@ -236,15 +238,40 @@ router.post("/forgot", async (req, res) => {
       `,
     });
 
-    if (error) {
-      console.error("❌ 비밀번호 재설정 이메일 전송 실패:", error);
-      return res.status(500).json({ message: "이메일 전송 실패: " + error.message });
-    }
+    if (error) throw new Error(error.message);
 
     console.log(`✅ 비밀번호 재설정 링크 전송됨: ${resetLink}`);
     res.json({ message: "비밀번호 재설정 링크를 이메일로 전송했습니다." });
   } catch (err) {
     console.error("비밀번호 재설정 오류:", err);
+    res.status(500).json({ message: "서버 오류가 발생했습니다." });
+  }
+});
+
+/* -------------------- ✅ 실제 비밀번호 재설정 -------------------- */
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword)
+      return res.status(400).json({ message: "유효하지 않은 요청입니다." });
+
+    const user = await User.findOne({
+      resetToken: token,
+      resetExpires: { $gt: Date.now() },
+    });
+
+    if (!user)
+      return res.status(400).json({ message: "토큰이 유효하지 않거나 만료되었습니다." });
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.resetToken = undefined;
+    user.resetExpires = undefined;
+    await user.save();
+
+    res.json({ message: "비밀번호가 성공적으로 재설정되었습니다." });
+  } catch (err) {
+    console.error("비밀번호 재설정 처리 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
   }
 });
