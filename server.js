@@ -10,10 +10,10 @@ import uploadRouter from "./routes/upload.js";
 import productRoutes from "./routes/productRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
-import authRoutes from "./routes/auth.js"; // ✅ 회원 인증 라우트
-import adminRoutes from "./routes/admin.js"; // ✅ 관리자 라우트
-import verifyRoutes from "./routes/verify.js"; // ✅ 이메일/휴대폰 인증 라우트
-import supportRoutes from "./routes/support.js"; // ✅ 고객센터 문의 라우트 추가
+import authRoutes from "./routes/auth.js";
+import adminRoutes from "./routes/admin.js";
+import verifyRoutes from "./routes/verify.js";
+import supportRoutes from "./routes/support.js"; // ✅ 고객센터 문의 라우트
 
 import { protect, adminOnly } from "./middleware/authMiddleware.js";
 
@@ -25,20 +25,19 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : [
       "http://localhost:5173",
-      "https://project-onyou.vercel.app", // ✅ Vercel 정식 도메인
-      "https://shop-backend-1-dfsl.onrender.com", // ✅ Render 백엔드 도메인
+      "https://project-onyou.vercel.app", // ✅ Vercel 프론트엔드
+      "https://shop-backend-1-dfsl.onrender.com", // ✅ Render 백엔드
+      "https://onyou.store", // ✅ 도메인 추가 (직접 접근 허용)
     ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // SSR, Postman 등 허용
-
       const allowed = allowedOrigins.some((o) => {
         const base = o.replace(/https?:\/\//, "");
         return origin.includes(base);
       });
-
       if (allowed) callback(null, true);
       else {
         console.warn(`🚫 차단된 CORS 요청: ${origin}`);
@@ -51,11 +50,13 @@ app.use(
   })
 );
 
-// ✅ preflight (OPTIONS) 요청 허용
+// ✅ preflight 요청 허용
 app.options("*", cors());
 
-/* -------------------- ✅ JSON 파싱 -------------------- */
+/* -------------------- ✅ JSON & URL 파싱 -------------------- */
+// ⚠️ 누락되었던 부분 추가
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
 /* -------------------- ✅ MongoDB 연결 -------------------- */
 mongoose
@@ -67,7 +68,7 @@ mongoose
   .then(() => console.log("✅ MongoDB 연결 성공"))
   .catch((err) => console.error("❌ MongoDB 연결 실패:", err.message));
 
-/* -------------------- ✅ 정적 폴더 설정 -------------------- */
+/* -------------------- ✅ 정적 파일 경로 -------------------- */
 const __dirname = path.resolve();
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -83,7 +84,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/verify", verifyRoutes);
-app.use("/api/support", supportRoutes); // ✅ 고객센터 라우트 추가
+app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트 (support.js 정확히 존재해야 함)
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
