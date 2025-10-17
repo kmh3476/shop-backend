@@ -110,14 +110,10 @@ router.post("/", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ (관리자 전용) 문의 전체 조회 -------------------- */
+// 관리자 전용 라우트 보호
 router.get("/", protect, adminOnly, async (req, res) => {
-  try {
-    const supports = await Support.find().sort({ createdAt: -1 });
-    res.json(supports);
-  } catch (err) {
-    res.status(500).json({ message: "조회 실패: " + err.message });
-  }
+  const supports = await Support.find().sort({ createdAt: -1 });
+  res.json(supports);
 });
 
 /* -------------------- ✅ (관리자 전용) 특정 문의 조회 -------------------- */
