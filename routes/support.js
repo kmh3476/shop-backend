@@ -3,7 +3,7 @@ import express from "express";
 import { Resend } from "resend";
 import rateLimit from "express-rate-limit";
 import Support from "../models/Support.js";
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // ✅ 추가
+import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -38,10 +38,12 @@ function isValidEmail(email) {
   return re.test(email);
 }
 
-/* -------------------- ✅ 문의 등록 -------------------- */
+/* ===========================================================
+ ✅ 1️⃣ [고객용] 문의 등록 (공개 라우트)
+=========================================================== */
 router.post("/", async (req, res) => {
   try {
-    const { name, email, subject, message } = req.body;
+    const { name, email, subject, message, isPrivate } = req.body;
 
     if (!email || !message)
       return res.status(400).json({ message: "이메일과 내용을 입력해주세요." });
@@ -70,7 +72,7 @@ router.post("/", async (req, res) => {
       `,
     });
 
-    // ✅ 사용자 자동 회신
+    // ✅ 사용자에게 자동 회신
     await resend.emails.send({
       from: "Onyou 고객센터 <no-reply@onyou.store>",
       to: safeEmail,
@@ -93,30 +95,63 @@ router.post("/", async (req, res) => {
       email: safeEmail,
       subject: safeSubject,
       message: safeMessage,
-      isRead: false, // 새 문의는 기본적으로 읽지 않음
+      isPrivate: !!isPrivate,
+      isRead: false,
     });
 
     res.json({
       success: true,
-      message: "문의가 접수되었습니다. 이메일을 확인해주세요.",
+      message: "문의가 정상적으로 접수되었습니다.",
       data: newSupport,
     });
   } catch (err) {
-    console.error("📧 문의 전송 오류:", err);
+    console.error("📧 문의 등록 오류:", err);
     res.status(500).json({
       success: false,
-      message: "문의 전송 실패: " + (err.message || "Resend 오류"),
+      message: "문의 등록 실패: " + (err.message || "서버 오류"),
     });
   }
 });
 
-// 관리자 전용 라우트 보호
-router.get("/", protect, adminOnly, async (req, res) => {
-  const supports = await Support.find().sort({ createdAt: -1 });
-  res.json(supports);
+/* ===========================================================
+ ✅ 2️⃣ [고객용] 문의 목록 조회 (공개)
+=========================================================== */
+router.get("/", async (req, res) => {
+  try {
+    // ✅ 비공개 문의는 제목만, 내용 숨김
+    const supports = await Support.find().sort({ createdAt: -1 });
+    const sanitized = supports.map((s) => ({
+      _id: s._id,
+      email: s.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"), // ✅ 이메일 중간 모자이크
+      subject: s.subject,
+      message: s.isPrivate ? "🔒 비공개 문의입니다." : s.message,
+      reply: s.reply,
+      repliedAt: s.repliedAt,
+      isPrivate: s.isPrivate,
+      createdAt: s.createdAt,
+    }));
+    res.json(sanitized);
+  } catch (err) {
+    console.error("❌ 문의 조회 실패:", err);
+    res.status(500).json({ message: "문의 조회 실패: " + err.message });
+  }
 });
 
-/* -------------------- ✅ (관리자 전용) 특정 문의 조회 -------------------- */
+/* ===========================================================
+ ✅ 3️⃣ [관리자용] 전체 문의 조회
+=========================================================== */
+router.get("/all", protect, adminOnly, async (req, res) => {
+  try {
+    const supports = await Support.find().sort({ createdAt: -1 });
+    res.json(supports);
+  } catch (err) {
+    res.status(500).json({ message: "조회 실패: " + err.message });
+  }
+});
+
+/* ===========================================================
+ ✅ 4️⃣ [관리자용] 문의 상세 조회
+=========================================================== */
 router.get("/:id", protect, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,7 +159,6 @@ router.get("/:id", protect, adminOnly, async (req, res) => {
     if (!inquiry)
       return res.status(404).json({ message: "문의 내역을 찾을 수 없습니다." });
 
-    // ✅ 읽음 처리
     if (!inquiry.isRead) {
       inquiry.isRead = true;
       await inquiry.save();
@@ -136,7 +170,9 @@ router.get("/:id", protect, adminOnly, async (req, res) => {
   }
 });
 
-/* -------------------- ✅ (관리자 전용) 답변 전송 -------------------- */
+/* ===========================================================
+ ✅ 5️⃣ [관리자용] 답변 전송
+=========================================================== */
 router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
@@ -167,7 +203,7 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
 
     inquiry.reply = reply;
     inquiry.repliedAt = new Date();
-    inquiry.isRead = true; // ✅ 답변 시 읽음 처리
+    inquiry.isRead = true;
     await inquiry.save();
 
     res.json({ success: true, message: "답변이 성공적으로 전송되었습니다." });
