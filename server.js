@@ -20,6 +20,10 @@ import { protect, adminOnly } from "./middleware/authMiddleware.js";
 dotenv.config();
 const app = express();
 
+/* -------------------- ✅ 프록시 환경 설정 (Render, Vercel 등) -------------------- */
+// ⚠️ express-rate-limit 오류 해결 & 클라이언트 IP 인식 가능하게
+app.set("trust proxy", 1);
+
 /* -------------------- ✅ CORS 설정 -------------------- */
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
@@ -27,7 +31,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       "http://localhost:5173",
       "https://project-onyou.vercel.app", // ✅ Vercel 프론트엔드
       "https://shop-backend-1-dfsl.onrender.com", // ✅ Render 백엔드
-      "https://onyou.store", // ✅ 도메인 추가 (직접 접근 허용)
+      "https://onyou.store", // ✅ 실제 도메인
     ];
 
 app.use(
@@ -45,7 +49,7 @@ app.use(
       }
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
@@ -54,7 +58,6 @@ app.use(
 app.options("*", cors());
 
 /* -------------------- ✅ JSON & URL 파싱 -------------------- */
-// ⚠️ 누락되었던 부분 추가
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -84,13 +87,14 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/verify", verifyRoutes);
-app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트 (support.js 정확히 존재해야 함)
+app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
 app.use((err, req, res, next) => {
-  console.error("🔥 서버 에러:", err.message);
+  console.error("🔥 서버 에러 발생:", err.message);
 
+  // ✅ CORS 차단 감지
   if (err.message.includes("CORS")) {
     return res.status(403).json({
       success: false,
@@ -98,9 +102,22 @@ app.use((err, req, res, next) => {
     });
   }
 
+  // ✅ express-rate-limit 관련 에러 감지
+  if (err.code === "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR") {
+    console.error(
+      "⚠️ 프록시 설정이 없어서 express-rate-limit가 클라이언트 IP를 읽지 못했습니다. app.set('trust proxy', 1)을 추가하세요."
+    );
+    return res.status(400).json({
+      success: false,
+      message: "서버 IP 설정 오류 (trust proxy 설정 필요).",
+    });
+  }
+
+  // ✅ 기본 오류 처리
   res.status(500).json({
     success: false,
     message: "서버 내부 오류가 발생했습니다.",
+    error: err.message,
   });
 });
 
