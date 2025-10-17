@@ -2,33 +2,27 @@
 import express from "express";
 import { Resend } from "resend";
 import rateLimit from "express-rate-limit";
-import Support from "../models/Support.js"; // ✅ DB 저장용 모델 (추가됨)
+import Support from "../models/Support.js";
+import { protect, adminOnly } from "../middleware/authMiddleware.js"; // ✅ 추가
 
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// ✅ 기본 환경 변수 확인
-if (!process.env.RESEND_API_KEY) {
-  console.warn("⚠️ [경고] RESEND_API_KEY가 설정되어 있지 않습니다.");
-}
-if (!process.env.SUPPORT_EMAIL) {
-  console.warn(
-    "⚠️ [경고] SUPPORT_EMAIL이 설정되어 있지 않습니다. 기본 support@onyou.store 로 전송됩니다."
-  );
-}
+/* -------------------- ✅ 환경 변수 검증 -------------------- */
+if (!process.env.RESEND_API_KEY)
+  console.warn("⚠️ RESEND_API_KEY가 설정되어 있지 않습니다.");
+if (!process.env.SUPPORT_EMAIL)
+  console.warn("⚠️ SUPPORT_EMAIL이 설정되어 있지 않습니다. 기본 support@onyou.store 사용.");
 
-// ✅ rate-limit (1분에 5회 이상 요청 방지)
+/* -------------------- ✅ rate-limit 설정 -------------------- */
 const supportLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  message: {
-    success: false,
-    message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
-  },
+  message: { success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
 });
 router.use(supportLimiter);
 
-// ✅ HTML escape (XSS 방지)
+/* -------------------- ✅ HTML escape (XSS 방지) -------------------- */
 function escapeHTML(str = "") {
   return str
     .replace(/&/g, "&amp;")
@@ -38,33 +32,30 @@ function escapeHTML(str = "") {
     .replace(/'/g, "&#039;");
 }
 
-// ✅ 이메일 형식 검증
+/* -------------------- ✅ 이메일 유효성 검사 -------------------- */
 function isValidEmail(email) {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return re.test(email);
 }
 
-/* ------------------------ ✅ 고객센터 문의 접수 ------------------------ */
+/* -------------------- ✅ 문의 등록 -------------------- */
 router.post("/", async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    if (!name || !email || !message)
-      return res.status(400).json({ message: "모든 필드를 입력해주세요." });
-
+    if (!email || !message)
+      return res.status(400).json({ message: "이메일과 내용을 입력해주세요." });
     if (!isValidEmail(email))
-      return res
-        .status(400)
-        .json({ message: "유효한 이메일 주소가 아닙니다." });
+      return res.status(400).json({ message: "유효한 이메일 주소가 아닙니다." });
 
     const safeSubject = subject?.trim() || "고객 문의";
-    const safeName = escapeHTML(name.trim());
+    const safeName = escapeHTML(name?.trim() || "고객");
     const safeEmail = escapeHTML(email.trim());
     const safeMessage = escapeHTML(message.trim());
     const adminEmail = process.env.SUPPORT_EMAIL || "support@onyou.store";
 
-    // ✅ 1️⃣ 관리자에게 이메일 전송
-    const adminMail = await resend.emails.send({
+    // ✅ 관리자에게 이메일 발송
+    await resend.emails.send({
       from: "Onyou 고객센터 <no-reply@onyou.store>",
       to: adminEmail,
       subject: `[고객문의] ${safeSubject}`,
@@ -73,55 +64,45 @@ router.post("/", async (req, res) => {
         <p><strong>보낸 사람:</strong> ${safeName} (${safeEmail})</p>
         <p><strong>제목:</strong> ${safeSubject}</p>
         <p><strong>내용:</strong></p>
-        <div style="padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9f9f9;">
+        <div style="padding:10px;border:1px solid #ddd;background:#f9f9f9;">
           ${safeMessage.replace(/\n/g, "<br>")}
         </div>
-        <p style="font-size:12px;color:#777;">관리자용 자동 알림 메일입니다.</p>
       `,
     });
 
-    if (!adminMail || adminMail.error)
-      throw new Error("관리자 이메일 전송 실패");
-
-    // ✅ 2️⃣ 사용자 자동 회신 이메일
-    const userMail = await resend.emails.send({
+    // ✅ 사용자 자동 회신
+    await resend.emails.send({
       from: "Onyou 고객센터 <no-reply@onyou.store>",
       to: safeEmail,
       subject: "문의가 정상적으로 접수되었습니다.",
       html: `
         <h3>안녕하세요, ${safeName}님.</h3>
-        <p>문의해주셔서 감사합니다. 아래와 같은 내용으로 문의가 접수되었습니다.</p>
-        <div style="padding:10px;border:1px solid #ddd;border-radius:6px;background:#f9f9f9;margin-top:10px;">
+        <p>문의해주셔서 감사합니다. 아래 내용으로 접수되었습니다.</p>
+        <div style="padding:10px;border:1px solid #ddd;background:#f9f9f9;margin-top:10px;">
           <p><strong>제목:</strong> ${safeSubject}</p>
           <p><strong>내용:</strong></p>
           <p>${safeMessage.replace(/\n/g, "<br>")}</p>
         </div>
-        <p style="margin-top:16px;">담당자가 확인 후 최대한 빠르게 회신드리겠습니다.</p>
-        <p style="font-size:12px;color:#777;">이 메일은 자동 발송 메일입니다. 직접 회신하지 마세요.</p>
+        <p style="margin-top:16px;">담당자가 확인 후 빠르게 회신드리겠습니다.</p>
       `,
     });
 
-    if (!userMail || userMail.error) {
-      console.warn("⚠️ 사용자 자동 회신 실패:", userMail.error);
-    }
-
-    // ✅ 3️⃣ DB에 문의 내용 저장
+    // ✅ DB 저장
     const newSupport = await Support.create({
       name: safeName,
       email: safeEmail,
       subject: safeSubject,
       message: safeMessage,
+      isRead: false, // 새 문의는 기본적으로 읽지 않음
     });
 
-    console.log(`✅ 고객 문의 접수됨: ${safeEmail}, 제목: ${safeSubject}`);
-
-    return res.json({
+    res.json({
       success: true,
-      message: "문의가 정상적으로 접수되었습니다. 이메일을 확인해주세요.",
+      message: "문의가 접수되었습니다. 이메일을 확인해주세요.",
       data: newSupport,
     });
   } catch (err) {
-    console.error("📧 고객센터 메일 전송 오류:", err);
+    console.error("📧 문의 전송 오류:", err);
     res.status(500).json({
       success: false,
       message: "문의 전송 실패: " + (err.message || "Resend 오류"),
@@ -129,28 +110,49 @@ router.post("/", async (req, res) => {
   }
 });
 
-/* ------------------------ ✅ 관리자 문의 조회 ------------------------ */
-router.get("/all", async (req, res) => {
+/* -------------------- ✅ (관리자 전용) 문의 전체 조회 -------------------- */
+router.get("/", protect, adminOnly, async (req, res) => {
   try {
     const supports = await Support.find().sort({ createdAt: -1 });
-    res.json({ success: true, data: supports });
+    res.json(supports);
   } catch (err) {
-    res.status(500).json({ success: false, message: "조회 실패: " + err.message });
+    res.status(500).json({ message: "조회 실패: " + err.message });
   }
 });
 
-/* ------------------------ ✅ 관리자 답장 전송 ------------------------ */
-router.post("/reply/:id", async (req, res) => {
+/* -------------------- ✅ (관리자 전용) 특정 문의 조회 -------------------- */
+router.get("/:id", protect, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const inquiry = await Support.findById(id);
+    if (!inquiry)
+      return res.status(404).json({ message: "문의 내역을 찾을 수 없습니다." });
+
+    // ✅ 읽음 처리
+    if (!inquiry.isRead) {
+      inquiry.isRead = true;
+      await inquiry.save();
+    }
+
+    res.json(inquiry);
+  } catch (err) {
+    res.status(500).json({ message: "조회 실패: " + err.message });
+  }
+});
+
+/* -------------------- ✅ (관리자 전용) 답변 전송 -------------------- */
+router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
     const { reply } = req.body;
-    if (!reply) return res.status(400).json({ message: "답변 내용을 입력해주세요." });
+
+    if (!reply)
+      return res.status(400).json({ message: "답변 내용을 입력해주세요." });
 
     const inquiry = await Support.findById(id);
     if (!inquiry)
       return res.status(404).json({ message: "문의 내역을 찾을 수 없습니다." });
 
-    // 이메일 회신
     await resend.emails.send({
       from: "Onyou 고객센터 <no-reply@onyou.store>",
       to: inquiry.email,
@@ -169,6 +171,7 @@ router.post("/reply/:id", async (req, res) => {
 
     inquiry.reply = reply;
     inquiry.repliedAt = new Date();
+    inquiry.isRead = true; // ✅ 답변 시 읽음 처리
     await inquiry.save();
 
     res.json({ success: true, message: "답변이 성공적으로 전송되었습니다." });
