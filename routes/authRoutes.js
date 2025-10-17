@@ -6,6 +6,7 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
+/* -------------------- ✅ 회원가입 -------------------- */
 router.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -17,10 +18,12 @@ router.post("/register", async (req, res) => {
 
     res.status(201).json({ message: "회원가입 성공", user });
   } catch (err) {
+    console.error("회원가입 오류:", err.message);
     res.status(500).json({ message: "서버 오류" });
   }
 });
 
+/* -------------------- ✅ 로그인 -------------------- */
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -30,9 +33,23 @@ router.post("/login", async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ message: "비밀번호가 일치하지 않습니다." });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user });
+    // ✅ 관리자 여부 포함해서 토큰 생성
+    const token = jwt.sign(
+      { id: user._id, isAdmin: user.isAdmin },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        isAdmin: user.isAdmin, // ✅ 관리자 여부 전달
+      },
+    });
   } catch (err) {
+    console.error("로그인 오류:", err.message);
     res.status(500).json({ message: "서버 오류" });
   }
 });

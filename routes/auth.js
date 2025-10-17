@@ -35,7 +35,7 @@ router.post("/check-id", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 이메일 인증 코드 전송 (Resend) -------------------- */
+/* -------------------- ✅ 이메일 인증 코드 전송 -------------------- */
 router.post("/send-email-code", async (req, res) => {
   try {
     const { email } = req.body;
@@ -53,7 +53,7 @@ router.post("/send-email-code", async (req, res) => {
       expires: Date.now() + 10 * 60 * 1000,
     });
 
-    // 만료된 코드 자동 삭제
+    // 자동 삭제
     setTimeout(() => emailVerificationCodes.delete(email), 10 * 60 * 1000);
 
     const { error } = await resend.emails.send({
@@ -118,29 +118,22 @@ router.post("/signup", async (req, res) => {
     if (!emailVerified)
       return res.status(400).json({ message: "이메일 인증을 완료해주세요." });
 
-    const existingUserId = await User.findOne({ userId });
-    if (existingUserId)
-      return res.status(400).json({ message: "이미 존재하는 아이디입니다." });
+    const existingUser = await User.findOne({
+      $or: [{ userId }, { nickname }, { email }],
+    });
+    if (existingUser)
+      return res.status(400).json({ message: "이미 존재하는 계정 정보가 있습니다." });
 
-    const existingNickname = await User.findOne({ nickname });
-    if (existingNickname)
-      return res.status(400).json({ message: "이미 사용 중인 닉네임입니다." });
-
-    const existingEmail = await User.findOne({ email });
-    if (existingEmail)
-      return res.status(400).json({ message: "이미 가입된 이메일입니다." });
-
-    // ❌ bcrypt 해싱 제거 (User.js의 pre('save')가 자동 처리)
     const newUser = await User.create({
       userId,
       nickname,
       email,
-      password, // 평문으로 저장하면 pre('save')에서 자동 해싱됨
+      password, // pre('save')에서 해싱됨
       emailVerified: true,
     });
 
     const token = jwt.sign(
-      { id: newUser._id, email: newUser.email },
+      { id: newUser._id, email: newUser.email, isAdmin: newUser.isAdmin },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -153,6 +146,7 @@ router.post("/signup", async (req, res) => {
         userId: newUser.userId,
         nickname: newUser.nickname,
         email: newUser.email,
+        isAdmin: newUser.isAdmin, // ✅ 관리자 여부 포함
       },
     });
   } catch (err) {
@@ -161,7 +155,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 로그인 (아이디 또는 이메일 둘 다 지원) -------------------- */
+/* -------------------- ✅ 로그인 -------------------- */
 router.post("/login", async (req, res) => {
   try {
     const { userId, email, password } = req.body;
@@ -172,7 +166,6 @@ router.post("/login", async (req, res) => {
         .status(400)
         .json({ message: "아이디(또는 이메일)와 비밀번호를 입력해주세요." });
 
-    // 아이디 또는 이메일로 사용자 찾기
     const user = await User.findOne({
       $or: [{ email: loginInput }, { userId: loginInput }],
     });
@@ -181,9 +174,7 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "존재하지 않는 계정입니다." });
 
     if (!user.emailVerified)
-      return res
-        .status(400)
-        .json({ message: "이메일 인증 후 로그인할 수 있습니다." });
+      return res.status(400).json({ message: "이메일 인증 후 로그인할 수 있습니다." });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
@@ -203,7 +194,7 @@ router.post("/login", async (req, res) => {
         userId: user.userId,
         nickname: user.nickname,
         email: user.email,
-        isAdmin: user.isAdmin,
+        isAdmin: user.isAdmin, // ✅ 관리자 여부 반드시 포함
       },
     });
   } catch (err) {
@@ -212,7 +203,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/* -------------------- ✅ 비밀번호 재설정 링크 발송 (Resend) -------------------- */
+/* -------------------- ✅ 비밀번호 재설정 링크 발송 -------------------- */
 router.post("/forgot", async (req, res) => {
   try {
     const { userId, email } = req.body;
@@ -239,11 +230,7 @@ router.post("/forgot", async (req, res) => {
       html: `
         <h2>비밀번호 재설정 요청</h2>
         <p>아래 버튼을 눌러 새 비밀번호를 설정하세요.</p>
-        <a href="${resetLink}"
-           style="display:inline-block;background:#007bff;color:white;
-           padding:10px 20px;border-radius:5px;text-decoration:none;">
-           비밀번호 재설정하기
-        </a>
+        <a href="${resetLink}" style="display:inline-block;background:#007bff;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;">비밀번호 재설정하기</a>
         <p>이 링크는 30분 동안 유효합니다.</p>
       `,
     });
@@ -271,9 +258,7 @@ router.post("/reset-password", async (req, res) => {
     });
 
     if (!user)
-      return res
-        .status(400)
-        .json({ message: "토큰이 유효하지 않거나 만료되었습니다." });
+      return res.status(400).json({ message: "토큰이 유효하지 않거나 만료되었습니다." });
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
