@@ -39,7 +39,7 @@ function isValidEmail(email) {
 }
 
 /* ===========================================================
- ✅ 1️⃣ [고객용] 문의 등록 (공개 라우트)
+ ✅ 1️⃣ [고객용] 문의 등록
 =========================================================== */
 router.post("/", async (req, res) => {
   try {
@@ -114,15 +114,14 @@ router.post("/", async (req, res) => {
 });
 
 /* ===========================================================
- ✅ 2️⃣ [고객용] 문의 목록 조회 (공개)
+ ✅ 2️⃣ [고객용] 문의 목록 조회
 =========================================================== */
 router.get("/", async (req, res) => {
   try {
-    // ✅ 비공개 문의는 제목만, 내용 숨김
     const supports = await Support.find().sort({ createdAt: -1 });
     const sanitized = supports.map((s) => ({
       _id: s._id,
-      email: s.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"), // ✅ 이메일 중간 모자이크
+      email: s.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
       subject: s.subject,
       message: s.isPrivate ? "🔒 비공개 문의입니다." : s.message,
       reply: s.reply,
@@ -210,6 +209,57 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   } catch (err) {
     console.error("📧 답변 전송 오류:", err);
     res.status(500).json({ message: "답변 전송 실패: " + err.message });
+  }
+});
+
+/* ===========================================================
+ ✅ 6️⃣ [고객용] 받은 답장 목록 보기
+=========================================================== */
+router.get("/replies", protect, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const replies = await Support.find({
+      email: userEmail,
+      reply: { $exists: true, $ne: "" },
+    })
+      .sort({ repliedAt: -1 })
+      .select("_id subject reply repliedAt");
+
+    res.json({
+      success: true,
+      replies: replies.map((r) => ({
+        _id: r._id,
+        inquiryTitle: r.subject,
+        message: r.reply,
+        createdAt: r.repliedAt,
+      })),
+    });
+  } catch (err) {
+    console.error("📭 답장 조회 실패:", err);
+    res.status(500).json({ message: "답장 조회 실패: " + err.message });
+  }
+});
+
+/* ===========================================================
+ ✅ 7️⃣ [고객용] 받은 답장 삭제
+=========================================================== */
+router.delete("/replies/:id", protect, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+
+    const inquiry = await Support.findOne({ _id: id, email: userEmail });
+    if (!inquiry)
+      return res.status(404).json({ message: "삭제할 메일을 찾을 수 없습니다." });
+
+    inquiry.reply = "";
+    inquiry.repliedAt = null;
+    await inquiry.save();
+
+    res.json({ success: true, message: "메일이 삭제되었습니다." });
+  } catch (err) {
+    console.error("📭 답장 삭제 실패:", err);
+    res.status(500).json({ message: "답장 삭제 실패: " + err.message });
   }
 });
 
