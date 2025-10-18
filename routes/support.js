@@ -162,14 +162,15 @@ router.get("/replies", protect, async (req, res) => {
       reply: { $exists: true, $ne: "" },
     })
       .sort({ repliedAt: -1 })
-      .select("_id subject reply repliedAt");
+      .select("_id subject message reply repliedAt"); // ✅ message 추가
 
     res.json({
       success: true,
       replies: replies.map((r) => ({
         _id: r._id,
         inquiryTitle: r.subject,
-        message: r.reply,
+        inquiryMessage: r.message, // ✅ 고객이 보낸 내용 추가
+        adminReply: r.reply, // ✅ 관리자 답변 구분
         createdAt: r.repliedAt,
       })),
     });
