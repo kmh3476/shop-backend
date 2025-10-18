@@ -18,7 +18,10 @@ if (!process.env.SUPPORT_EMAIL)
 const supportLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  message: { success: false, message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+  message: {
+    success: false,
+    message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+  },
 });
 router.use(supportLimiter);
 
@@ -149,7 +152,58 @@ router.get("/all", protect, adminOnly, async (req, res) => {
 });
 
 /* ===========================================================
- ✅ 4️⃣ [관리자용] 문의 상세 조회
+ ✅ 4️⃣ [고객용] 받은 답장 목록 보기 (‼ 순서 이동)
+=========================================================== */
+router.get("/replies", protect, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const replies = await Support.find({
+      email: userEmail,
+      reply: { $exists: true, $ne: "" },
+    })
+      .sort({ repliedAt: -1 })
+      .select("_id subject reply repliedAt");
+
+    res.json({
+      success: true,
+      replies: replies.map((r) => ({
+        _id: r._id,
+        inquiryTitle: r.subject,
+        message: r.reply,
+        createdAt: r.repliedAt,
+      })),
+    });
+  } catch (err) {
+    console.error("📭 답장 조회 실패:", err);
+    res.status(500).json({ message: "답장 조회 실패: " + err.message });
+  }
+});
+
+/* ===========================================================
+ ✅ 5️⃣ [고객용] 받은 답장 삭제 (‼ 순서 이동)
+=========================================================== */
+router.delete("/replies/:id", protect, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user.email;
+
+    const inquiry = await Support.findOne({ _id: id, email: userEmail });
+    if (!inquiry)
+      return res.status(404).json({ message: "삭제할 메일을 찾을 수 없습니다." });
+
+    inquiry.reply = "";
+    inquiry.repliedAt = null;
+    await inquiry.save();
+
+    res.json({ success: true, message: "메일이 삭제되었습니다." });
+  } catch (err) {
+    console.error("📭 답장 삭제 실패:", err);
+    res.status(500).json({ message: "답장 삭제 실패: " + err.message });
+  }
+});
+
+/* ===========================================================
+ ✅ 6️⃣ [관리자용] 문의 상세 조회
 =========================================================== */
 router.get("/:id", protect, adminOnly, async (req, res) => {
   try {
@@ -170,7 +224,7 @@ router.get("/:id", protect, adminOnly, async (req, res) => {
 });
 
 /* ===========================================================
- ✅ 5️⃣ [관리자용] 답변 전송
+ ✅ 7️⃣ [관리자용] 답변 전송
 =========================================================== */
 router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
@@ -209,57 +263,6 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   } catch (err) {
     console.error("📧 답변 전송 오류:", err);
     res.status(500).json({ message: "답변 전송 실패: " + err.message });
-  }
-});
-
-/* ===========================================================
- ✅ 6️⃣ [고객용] 받은 답장 목록 보기
-=========================================================== */
-router.get("/replies", protect, async (req, res) => {
-  try {
-    const userEmail = req.user.email;
-    const replies = await Support.find({
-      email: userEmail,
-      reply: { $exists: true, $ne: "" },
-    })
-      .sort({ repliedAt: -1 })
-      .select("_id subject reply repliedAt");
-
-    res.json({
-      success: true,
-      replies: replies.map((r) => ({
-        _id: r._id,
-        inquiryTitle: r.subject,
-        message: r.reply,
-        createdAt: r.repliedAt,
-      })),
-    });
-  } catch (err) {
-    console.error("📭 답장 조회 실패:", err);
-    res.status(500).json({ message: "답장 조회 실패: " + err.message });
-  }
-});
-
-/* ===========================================================
- ✅ 7️⃣ [고객용] 받은 답장 삭제
-=========================================================== */
-router.delete("/replies/:id", protect, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userEmail = req.user.email;
-
-    const inquiry = await Support.findOne({ _id: id, email: userEmail });
-    if (!inquiry)
-      return res.status(404).json({ message: "삭제할 메일을 찾을 수 없습니다." });
-
-    inquiry.reply = "";
-    inquiry.repliedAt = null;
-    await inquiry.save();
-
-    res.json({ success: true, message: "메일이 삭제되었습니다." });
-  } catch (err) {
-    console.error("📭 답장 삭제 실패:", err);
-    res.status(500).json({ message: "답장 삭제 실패: " + err.message });
   }
 });
 
