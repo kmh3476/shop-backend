@@ -1,0 +1,33 @@
+{
+  "kind": "collectionType",
+  "collectionName": "site_settings",
+  "info": {
+    "singularName": "site-setting",
+    "pluralName": "site-settings",
+    "displayName": "Site Setting"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fontFamily": {
+      "type": "string"
+    },
+    "fontSize": {
+      "type": "string"
+    },
+    "textColor": {
+      "type": "string"
+    },
+    "backgroundColor": {
+      "type": "string"
+    },
+    "imageMaxWidth": {
+      "type": "string"
+    },
+    "imageMaxHeight": {
+      "type": "string"
+    }
+  }
+}
