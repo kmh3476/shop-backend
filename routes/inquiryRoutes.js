@@ -3,22 +3,49 @@ import Inquiry from "../models/Inquiry.js";
 
 const router = express.Router();
 
-// ✅ 특정 상품 문의 목록
+// ✅ 특정 상품 문의 목록 (공지글 포함)
 router.get("/:productId", async (req, res) => {
   try {
-    const inquiries = await Inquiry.find({ productId: req.params.productId }).sort({ createdAt: -1 });
+    const inquiries = await Inquiry.find({
+      $or: [
+        { productId: req.params.productId },
+        { isNotice: true }, // ✅ 공지글도 함께 표시
+      ],
+    }).sort({ isNotice: -1, createdAt: -1 }); // 공지글이 위로 오게 정렬
+
     res.json(inquiries);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ 문의 등록
+// ✅ 문의 등록 (일반 사용자)
 router.post("/", async (req, res) => {
   try {
     const newInquiry = new Inquiry(req.body);
     await newInquiry.save();
     res.status(201).json(newInquiry);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// ✅ 공지글 등록 (관리자 전용)
+router.post("/notice", async (req, res) => {
+  try {
+    // 관리자 인증 미들웨어(authMiddleware)를 나중에 연결 가능
+    const { question, answer } = req.body;
+
+    const newNotice = new Inquiry({
+      userName: "관리자",
+      question,
+      answer: answer || "",
+      isNotice: true,
+      isPrivate: false,
+    });
+
+    await newNotice.save();
+    res.status(201).json({ message: "공지글이 등록되었습니다.", notice: newNotice });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
