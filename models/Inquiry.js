@@ -5,7 +5,7 @@ const inquirySchema = new mongoose.Schema(
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      required: true,
+      required: false, // ✅ 기본값 false로 변경 (공지글 허용)
     },
     userName: { type: String, default: "익명" },
     question: { type: String, required: true },
@@ -19,17 +19,23 @@ const inquirySchema = new mongoose.Schema(
 );
 
 // ✅ 공지글일 경우 productId 필수 제한 완전 해제
+// ✅ 일반 문의일 경우 productId가 반드시 있어야 함
 inquirySchema.pre("validate", function (next) {
+  // 공지글이면 productId를 제거해도 무방
   if (this.isNotice) {
-    // productId 필드를 제거하고 required 조건 자체를 비활성화
     this.productId = undefined;
-
-    // mongoose 7.x 이상에서는 다음 코드로 required 속성 변경 가능
     const path = this.schema.path("productId");
     if (path && path.options.required) {
       path.options.required = false;
     }
+    return next();
   }
+
+  // 일반 문의인데 productId가 없으면 에러 발생
+  if (!this.isNotice && !this.productId) {
+    return next(new Error("상품 문의에는 productId가 필요합니다."));
+  }
+
   next();
 });
 
