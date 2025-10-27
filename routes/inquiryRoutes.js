@@ -3,6 +3,17 @@ import Inquiry from "../models/Inquiry.js";
 
 const router = express.Router();
 
+// ✅ 모든 문의글 + 공지글 조회 (고객센터용)
+router.get("/all", async (req, res) => {
+  try {
+    const inquiries = await Inquiry.find()
+      .sort({ isNotice: -1, createdAt: -1 }); // 공지글이 위로 오게 정렬
+    res.json(inquiries);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ✅ 특정 상품 문의 목록 (공지글 포함)
 router.get("/:productId", async (req, res) => {
   try {
