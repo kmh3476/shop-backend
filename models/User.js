@@ -38,6 +38,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "비밀번호는 필수입니다."],
       minlength: [6, "비밀번호는 최소 6자 이상이어야 합니다."],
+      select: false, // ✅ 수정: 기본적으로 응답에 포함되지 않도록 설정
     },
 
     // ✅ 전화번호 (선택)
@@ -101,6 +102,19 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 // ✅ 관리자 여부 확인용 메서드 (선택)
 userSchema.methods.isAdminUser = function () {
   return this.isAdmin === true;
+};
+
+// ✅ 수정: JSON 변환 시 비밀번호 제거 + isAdmin 포함 보장
+userSchema.methods.toJSON = function () {
+  const obj = this.toObject();
+  delete obj.password;
+  obj.isAdmin = this.isAdmin === true; // 명시적 보장
+  return obj;
+};
+
+// ✅ 수정: 관리자만 필터링하는 헬퍼 메서드 (선택)
+userSchema.statics.findAdmins = async function () {
+  return this.find({ isAdmin: true });
 };
 
 // ✅ 모델 생성 및 내보내기
