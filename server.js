@@ -90,6 +90,17 @@ app.use("/api/verify", verifyRoutes);
 app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 
+/* -------------------- ✅ 프론트엔드 URL 자동 안내 라우트 -------------------- */
+// 👉 프론트에서 /auth/login 같은 경로를 잘못 쏘면 안내해주기
+app.use("/auth", (req, res) => {
+  res.status(400).json({
+    success: false,
+    message:
+      "❌ 요청 경로가 잘못되었습니다. '/auth' 대신 '/api/auth'를 사용하세요.",
+    correctEndpoint: "/api/auth/login",
+  });
+});
+
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
 app.use((err, req, res, next) => {
   console.error("🔥 서버 에러 발생:", err.message);
@@ -125,4 +136,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📡 Auth endpoint: /api/auth/login`);
 });

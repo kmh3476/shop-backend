@@ -146,7 +146,7 @@ router.post("/signup", async (req, res) => {
         userId: newUser.userId,
         nickname: newUser.nickname,
         email: newUser.email,
-        isAdmin: newUser.isAdmin, // ✅ 관리자 여부 포함
+        isAdmin: newUser.isAdmin,
       },
     });
   } catch (err) {
@@ -166,9 +166,10 @@ router.post("/login", async (req, res) => {
         .status(400)
         .json({ message: "아이디(또는 이메일)와 비밀번호를 입력해주세요." });
 
+    // ✅ 비밀번호 select:false 이므로 강제 포함
     const user = await User.findOne({
       $or: [{ email: loginInput }, { userId: loginInput }],
-    });
+    }).select("+password");
 
     if (!user)
       return res.status(400).json({ message: "존재하지 않는 계정입니다." });
@@ -176,9 +177,21 @@ router.post("/login", async (req, res) => {
     if (!user.emailVerified)
       return res.status(400).json({ message: "이메일 인증 후 로그인할 수 있습니다." });
 
+    // ✅ bcrypt.compare 전에 user.password 검증
+    if (!user.password) {
+      console.error("❌ DB에서 비밀번호가 조회되지 않음:", user.userId);
+      return res.status(500).json({ message: "서버 설정 오류: password 필드 누락" });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
       return res.status(400).json({ message: "비밀번호가 틀립니다." });
+
+    // ✅ JWT_SECRET 검증
+    if (!process.env.JWT_SECRET) {
+      console.error("❌ JWT_SECRET 누락됨 (.env 확인 필요)");
+      return res.status(500).json({ message: "서버 보안 키 누락 (관리자에게 문의)" });
+    }
 
     const token = jwt.sign(
       { id: user._id, email: user.email, isAdmin: user.isAdmin },
@@ -194,12 +207,12 @@ router.post("/login", async (req, res) => {
         userId: user.userId,
         nickname: user.nickname,
         email: user.email,
-        isAdmin: user.isAdmin, // ✅ 관리자 여부 반드시 포함
+        isAdmin: user.isAdmin,
       },
     });
   } catch (err) {
     console.error("로그인 오류:", err);
-    res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    res.status(500).json({ message: "서버 오류가 발생했습니다.", error: err.message });
   }
 });
 
@@ -215,7 +228,7 @@ router.post("/forgot", async (req, res) => {
       return res.status(400).json({ message: "입력한 아이디와 이메일이 일치하지 않습니다." });
 
     const resetToken = crypto.randomBytes(20).toString("hex");
-    const resetExpires = Date.now() + 30 * 60 * 1000; // 30분
+    const resetExpires = Date.now() + 30 * 60 * 1000;
 
     user.resetToken = resetToken;
     user.resetExpires = resetExpires;
