@@ -9,7 +9,9 @@ const inquirySchema = new mongoose.Schema(
     },
     userName: { type: String, default: "익명" },
     question: { type: String, required: true },
-    answer: { type: String, default: "" }, // 관리자가 답변 달 수 있게
+    answer: { type: String, default: "" }, // 사용자가 작성한 문의 내용
+    reply: { type: String, default: "" }, // ✅ 관리자가 남긴 답변 내용 (새로 추가)
+    repliedAt: { type: Date }, // ✅ 관리자 답변 시각 기록
     isPrivate: { type: Boolean, default: false },
 
     // ✅ 공지글 여부 (관리자가 작성하는 경우 true)

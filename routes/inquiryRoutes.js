@@ -89,7 +89,6 @@ router.post("/", async (req, res) => {
         console.log("📧 문의 확인 메일 전송 완료:", email);
       } catch (mailErr) {
         console.error("📧 이메일 발송 실패:", mailErr);
-        // 실패 시에도 문의는 정상 등록되므로 오류로 응답은 하지 않음
       }
     }
 
@@ -126,6 +125,51 @@ router.post("/notice", async (req, res) => {
   } catch (err) {
     console.error("❌ 공지 등록 실패:", err);
     res.status(400).json({ message: err.message });
+  }
+});
+
+// ✅ 관리자 답변 등록/수정
+router.post("/:id/reply", async (req, res) => {
+  try {
+    const { reply } = req.body;
+    const inquiry = await Inquiry.findById(req.params.id);
+
+    if (!inquiry) {
+      return res.status(404).json({ message: "문의글을 찾을 수 없습니다." });
+    }
+
+    inquiry.reply = reply;
+    inquiry.repliedAt = new Date();
+
+    await inquiry.save();
+
+    // ✅ 답변 이메일 발송
+    if (inquiry.email) {
+      try {
+        await resend.emails.send({
+          from: "support@onyou.shop",
+          to: inquiry.email,
+          subject: "[OnYou] 문의하신 내용에 대한 답변입니다.",
+          html: `
+            <div style="font-family:sans-serif;line-height:1.6;color:#333">
+              <h2>문의하신 내용에 대한 답변입니다.</h2>
+              <p><strong>문의 제목:</strong> ${inquiry.question}</p>
+              <p><strong>답변 내용:</strong><br/>${reply}</p>
+              <hr style="border:none;border-top:1px solid #ddd;margin:10px 0"/>
+              <p>감사합니다.<br/><strong>OnYou 고객센터</strong></p>
+            </div>
+          `,
+        });
+        console.log("📧 답변 메일 발송 완료:", inquiry.email);
+      } catch (err) {
+        console.error("📧 답변 메일 발송 실패:", err);
+      }
+    }
+
+    res.status(200).json({ message: "답변이 저장되었습니다.", inquiry });
+  } catch (err) {
+    console.error("❌ 답변 등록 실패:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 
