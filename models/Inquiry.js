@@ -14,6 +14,9 @@ const inquirySchema = new mongoose.Schema(
 
     // ✅ 공지글 여부 (관리자가 작성하는 경우 true)
     isNotice: { type: Boolean, default: false },
+
+    // ✅ 이메일 정보(선택사항)
+    email: { type: String, default: "" },
   },
   { timestamps: true }
 );
@@ -31,9 +34,12 @@ inquirySchema.pre("validate", function (next) {
     return next();
   }
 
-  // 일반 문의인데 productId가 없으면 에러 발생
+  // 일반 문의인데 productId가 없으면 에러 발생 (단, Support 페이지용 문의는 예외 허용)
   if (!this.isNotice && !this.productId) {
-    return next(new Error("상품 문의에는 productId가 필요합니다."));
+    // Support 페이지에서 직접 등록한 고객 문의는 productId 없이도 허용되도록 예외 처리
+    if (!this.userName || !this.question) {
+      return next(new Error("상품 문의에는 productId가 필요합니다."));
+    }
   }
 
   next();
