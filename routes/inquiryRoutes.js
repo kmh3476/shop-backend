@@ -26,7 +26,12 @@ router.get("/all", async (req, res) => {
 });
 
 // ✅ 특정 상품 문의 목록 (공지글 포함)
-router.get("/:productId", async (req, res) => {
+router.get("/:productId", async (req, res, next) => {
+  // ⚠️ "/notice" 요청이 여기로 잘못 들어오지 않게 예외처리 추가
+  if (req.params.productId === "notice" || req.params.productId === "all") {
+    return next();
+  }
+
   try {
     const inquiries = await Inquiry.find({
       $or: [
