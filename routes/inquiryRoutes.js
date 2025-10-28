@@ -49,10 +49,23 @@ router.get("/:productId", async (req, res, next) => {
 // ✅ 문의 등록 (일반 사용자)
 router.post("/", async (req, res) => {
   try {
-    const newInquiry = new Inquiry(req.body);
+    // ⚙️ Support.jsx에서 오는 필드 구조를 Inquiry 스키마에 맞게 변환
+    const { email, subject, message, isPrivate, productId } = req.body;
+
+    const newInquiry = new Inquiry({
+      userName: email || "익명",
+      question: subject,
+      answer: message || "",
+      isPrivate: isPrivate || false,
+      isNotice: false,
+      productId: productId || undefined,
+      email: email || "",
+    });
+
     await newInquiry.save();
     res.status(201).json(newInquiry);
   } catch (err) {
+    console.error("❌ 문의 등록 실패:", err);
     res.status(400).json({ message: err.message });
   }
 });
