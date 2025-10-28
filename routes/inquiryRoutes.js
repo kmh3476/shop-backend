@@ -70,7 +70,7 @@ router.post("/", async (req, res) => {
     if (email) {
       try {
         await resend.emails.send({
-          from: "support@onyou.shop", // ✅ 실제 Resend 인증된 도메인 사용
+          from: "support@onyou.store", // ✅ 실제 Resend 인증된 도메인 사용
           to: email,
           subject: "[OnYou] 문의가 접수되었습니다.",
           html: `
@@ -147,7 +147,7 @@ router.post("/:id/reply", async (req, res) => {
     if (inquiry.email) {
       try {
         await resend.emails.send({
-          from: "support@onyou.shop",
+          from: "support@onyou.store",
           to: inquiry.email,
           subject: "[OnYou] 문의하신 내용에 대한 답변입니다.",
           html: `
