@@ -3,7 +3,18 @@ import Inquiry from "../models/Inquiry.js";
 
 const router = express.Router();
 
-// ✅ 모든 문의글 + 공지글 조회 (고객센터용)
+// ✅ 전체 문의 + 공지글 조회 (고객센터용)
+router.get("/", async (req, res) => {
+  try {
+    const inquiries = await Inquiry.find()
+      .sort({ isNotice: -1, createdAt: -1 }); // 공지글이 위로 오게 정렬
+    res.json(inquiries);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ✅ 모든 문의글 + 공지글 조회 (/all 별칭)
 router.get("/all", async (req, res) => {
   try {
     const inquiries = await Inquiry.find()
@@ -41,17 +52,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ 전체 문의 + 공지글 조회 (고객센터용)
-router.get("/", async (req, res) => {
-  try {
-    const inquiries = await Inquiry.find()
-      .sort({ isNotice: -1, createdAt: -1 });
-    res.json(inquiries);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 // ✅ 공지글 등록 (관리자 전용)
 router.post("/notice", async (req, res) => {
   try {
@@ -67,7 +67,10 @@ router.post("/notice", async (req, res) => {
     });
 
     await newNotice.save();
-    res.status(201).json({ message: "공지글이 등록되었습니다.", notice: newNotice });
+    res.status(201).json({
+      message: "공지글이 등록되었습니다.",
+      notice: newNotice,
+    });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
