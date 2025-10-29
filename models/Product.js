@@ -1,7 +1,8 @@
 // 📁 models/Product.js
 import mongoose from "mongoose";
 
-const productSchema = new mongoose.Schema(
+// ✅ mongoose.model 재등록 방지 (서버리스 환경 대응)
+const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     price: { type: Number, required: true },
@@ -25,15 +26,30 @@ const productSchema = new mongoose.Schema(
       default: "https://placehold.co/250x200?text=No+Image",
     },
 
-    // ✅ 페이지(탭) 분류용 필드 추가 (PageSetting 모델과 연결)
+    // ✅ 페이지(탭) 분류용 필드 (PageSetting 모델과 ObjectId로 연결)
     categoryPage: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "PageSetting",
+      ref: "PageSetting", // 🔧 반드시 PageSetting과 일치해야 함
       default: null,
     },
   },
-  { timestamps: true } // ✅ createdAt, updatedAt 자동 생성
+  {
+    timestamps: true, // ✅ createdAt, updatedAt 자동 생성
+    versionKey: false, // 🔧 __v 제거 (관리 편의성)
+  }
 );
 
-const Product = mongoose.model("Product", productSchema);
+// ✅ populate용 가상 필드 (선택사항)
+//    populate 시 PageSetting의 label만 가져올 수 있도록
+ProductSchema.virtual("pageLabel", {
+  ref: "PageSetting",
+  localField: "categoryPage",
+  foreignField: "_id",
+  justOne: true,
+});
+
+// ✅ 모델 중복 등록 방지 (Render/Vercel 환경에서 중요)
+const Product =
+  mongoose.models.Product || mongoose.model("Product", ProductSchema);
+
 export default Product;
