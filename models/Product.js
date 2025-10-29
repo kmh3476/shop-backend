@@ -24,6 +24,13 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: "https://placehold.co/250x200?text=No+Image",
     },
+
+    // ✅ 페이지(탭) 분류용 필드 추가 (PageSetting 모델과 연결)
+    categoryPage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PageSetting",
+      default: null,
+    },
   },
   { timestamps: true } // ✅ createdAt, updatedAt 자동 생성
 );

@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import { fileURLToPath } from "url"; // ✅ ESModule용 __dirname 대체
 
 // ✅ 라우트 불러오기
 import uploadRouter from "./routes/upload.js";
@@ -14,6 +15,7 @@ import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
 import verifyRoutes from "./routes/verify.js";
 import supportRoutes from "./routes/support.js"; // ✅ 고객센터 문의 라우트
+import pageSettingRoutes from "./routes/pageSettingRoutes.js"; // ✅ 탭(페이지) 설정 라우트
 
 import { protect, adminOnly } from "./middleware/authMiddleware.js";
 
@@ -72,7 +74,10 @@ mongoose
   .catch((err) => console.error("❌ MongoDB 연결 실패:", err.message));
 
 /* -------------------- ✅ 정적 파일 경로 -------------------- */
-const __dirname = path.resolve();
+// ⚠️ ESModule 환경에서는 __dirname 직접 사용 불가 → 아래 코드 필수
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* -------------------- ✅ 기본 라우트 -------------------- */
@@ -89,9 +94,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/verify", verifyRoutes);
 app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트
 app.use("/api/admin", protect, adminOnly, adminRoutes);
+app.use("/api/pages", pageSettingRoutes); // ✅ 페이지(탭) 설정 라우트
 
 /* -------------------- ✅ 프론트엔드 URL 자동 안내 라우트 -------------------- */
-// 👉 프론트에서 /auth/login 같은 경로를 잘못 쏘면 안내해주기
 app.use("/auth", (req, res) => {
   res.status(400).json({
     success: false,
