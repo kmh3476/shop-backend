@@ -1,5 +1,5 @@
-// models/PageSetting.js
-const mongoose = require("mongoose");
+// 📁 models/PageSetting.js
+import mongoose from "mongoose";
 
 const pageSettingSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true }, // 내부용 key
@@ -7,4 +7,6 @@ const pageSettingSchema = new mongoose.Schema({
   order: { type: Number, default: 0 }, // 탭 순서
 });
 
-module.exports = mongoose.model("PageSetting", pageSettingSchema);
+// ✅ ESM 환경에서는 반드시 default export 사용
+const PageSetting = mongoose.model("PageSetting", pageSettingSchema);
+export default PageSetting;
