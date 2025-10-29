@@ -1,5 +1,6 @@
 // 📁 routes/productRoutes.js
 import express from "express";
+import mongoose from "mongoose"; // ✅ 추가
 import Product from "../models/Product.js";
 
 const router = express.Router();
@@ -62,7 +63,7 @@ router.post("/", async (req, res) => {
         ? mainImage
         : imageArray[0];
 
-    // 🔧 categoryPage 추가 저장
+    // 🔧 categoryPage ObjectId 변환하여 저장
     const newProduct = new Product({
       name,
       price,
@@ -70,7 +71,9 @@ router.post("/", async (req, res) => {
       image: resolvedMain, // 단일 이미지 필드(호환용)
       images: imageArray,
       mainImage: resolvedMain, // ✅ 대표 이미지 필드 저장
-      categoryPage: categoryPage || null, // ✅ 선택한 탭(ObjectId) 저장
+      categoryPage: categoryPage
+        ? new mongoose.Types.ObjectId(categoryPage)
+        : null, // ✅ 문자열 → ObjectId 변환
     });
 
     const saved = await newProduct.save();
@@ -124,9 +127,11 @@ router.put("/:id", async (req, res) => {
       product.mainImage = product.images[0];
     }
 
-    // 🔧 categoryPage(탭) 수정 가능하게 추가
+    // 🔧 categoryPage(탭) 수정 가능하게 ObjectId 변환
     if (categoryPage !== undefined) {
-      product.categoryPage = categoryPage || null;
+      product.categoryPage = categoryPage
+        ? new mongoose.Types.ObjectId(categoryPage)
+        : null;
     }
 
     const updated = await product.save();
