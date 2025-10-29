@@ -1,8 +1,9 @@
-// routes/pageSettingRoutes.js
-const express = require("express");
+// 📁 routes/pageSettingRoutes.js
+import express from "express";
+import PageSetting from "../models/PageSetting.js";
+import { protect } from "../middleware/authMiddleware.js";
+
 const router = express.Router();
-const PageSetting = require("../models/PageSetting");
-const { protect } = require("../middleware/authMiddleware");
 
 // ✅ 모든 탭 조회
 router.get("/", async (req, res) => {
@@ -107,4 +108,5 @@ router.patch("/reorder", protect, async (req, res) => {
   }
 });
 
-module.exports = router;
+// ✅ ESM 환경에서는 반드시 default export 필요
+export default router;
