@@ -96,6 +96,11 @@ app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 app.use("/api/pages", pageSettingRoutes); // ✅ 페이지(탭) 설정 라우트
 
+/* -------------------- ✅ 호환용 구버전 라우트 (404 방지용) -------------------- */
+// ✅ 프론트에서 /pages, /products 로 요청하는 경우를 위해 추가
+app.use("/pages", pageSettingRoutes);
+app.use("/products", productRoutes);
+
 /* -------------------- ✅ 프론트엔드 URL 자동 안내 라우트 -------------------- */
 app.use("/auth", (req, res) => {
   res.status(400).json({
