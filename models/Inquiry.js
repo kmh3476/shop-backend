@@ -7,7 +7,7 @@ const inquirySchema = new mongoose.Schema(
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      required: false, // 공지글은 productId 없이도 작성 가능
+      required: false, // 공지글은 productId 없이 작성 가능
     },
 
     // ✅ 사용자 정보
@@ -81,44 +81,66 @@ const inquirySchema = new mongoose.Schema(
 inquirySchema.index({ productId: 1, createdAt: -1 });
 inquirySchema.index({ isNotice: 1 }); // 공지글 빠른 조회용
 
-// ✅ 공지글 / 일반 문의 유효성 검사
+/* --------------------------------------------------------
+ ✅ (1) 공지글 / 일반 문의 유효성 검사
+-------------------------------------------------------- */
 inquirySchema.pre("validate", function (next) {
-  // 🔹 공지글일 경우 productId 필수 해제
+  // 🔹 공지글일 경우 productId 완전히 제거
   if (this.isNotice) {
     this.productId = undefined;
-    const path = this.schema.path("productId");
-    if (path && path.options.required) {
-      path.options.required = false;
-    }
     return next();
   }
 
-  // 🔹 일반 문의일 경우 productId가 반드시 있어야 함
-  if (!this.isNotice && !this.productId) {
-    // 단, Support 페이지 문의는 productId 없이도 가능 (이름, 내용만 존재할 경우)
-    if (!this.userName || !this.question) {
+  // 🔹 일반 문의일 경우 productId 반드시 필요
+  if (!this.isNotice) {
+    if (!this.productId) {
       return next(new Error("상품 문의에는 productId가 필요합니다."));
+    }
+
+    // 🔹 productId가 ObjectId 형식인지 확인
+    if (!mongoose.Types.ObjectId.isValid(this.productId)) {
+      return next(new Error("잘못된 상품 ID 형식입니다."));
     }
   }
 
   next();
 });
 
-// ✅ 저장 전 데이터 정리
+/* --------------------------------------------------------
+ ✅ (2) 저장 전 데이터 정리
+-------------------------------------------------------- */
 inquirySchema.pre("save", function (next) {
   if (this.userName) this.userName = this.userName.trim();
   if (this.question) this.question = this.question.trim();
   if (this.answer) this.answer = this.answer.trim();
   if (this.reply) this.reply = this.reply.trim();
+
+  // 🔹 공지글은 productId 절대 저장되지 않도록 강제 제거
+  if (this.isNotice) {
+    this.productId = undefined;
+  }
+
   next();
 });
 
-// ✅ 정적 메서드: 상품별 문의 목록 불러오기
+/* --------------------------------------------------------
+ ✅ (3) 정적 메서드: 상품별 문의 목록 불러오기
+-------------------------------------------------------- */
 inquirySchema.statics.findByProduct = async function (productId) {
   try {
-    const inquiries = await this.find({ productId })
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      console.warn("⚠️ 잘못된 productId 요청:", productId);
+      return [];
+    }
+
+    // 🔹 공지글은 제외하고 실제 상품 문의만 반환
+    const inquiries = await this.find({
+      productId,
+      isNotice: { $ne: true },
+    })
       .sort({ createdAt: -1 })
       .lean();
+
     return inquiries || [];
   } catch (error) {
     console.error("❌ 문의 조회 중 오류:", error);
@@ -126,7 +148,9 @@ inquirySchema.statics.findByProduct = async function (productId) {
   }
 };
 
-// ✅ 인스턴스 메서드: 관리자 답변 추가
+/* --------------------------------------------------------
+ ✅ (4) 인스턴스 메서드: 관리자 답변 추가
+-------------------------------------------------------- */
 inquirySchema.methods.addReply = async function (replyText) {
   this.reply = replyText;
   this.repliedAt = new Date();
@@ -134,12 +158,16 @@ inquirySchema.methods.addReply = async function (replyText) {
   return this;
 };
 
-// ✅ 가상 필드: 답변 여부 표시
+/* --------------------------------------------------------
+ ✅ (5) 가상 필드: 답변 여부 표시
+-------------------------------------------------------- */
 inquirySchema.virtual("hasReply").get(function () {
   return this.reply && this.reply.trim().length > 0;
 });
 
-// ✅ JSON 변환 시 가상 필드 포함
+/* --------------------------------------------------------
+ ✅ (6) JSON 변환 시 가상 필드 포함
+-------------------------------------------------------- */
 inquirySchema.set("toJSON", { virtuals: true });
 inquirySchema.set("toObject", { virtuals: true });
 

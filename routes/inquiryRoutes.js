@@ -1,51 +1,72 @@
+// 📁 C:\Users\Kn\Project\shop-backend\routes\inquiryRoutes.js
 import express from "express";
+import mongoose from "mongoose";
 import Inquiry from "../models/Inquiry.js";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const router = express.Router();
 
-// ✅ 전체 문의 + 공지글 조회 (고객센터용)
+/* --------------------------------------------------------
+ ✅ (1) 전체 문의 + 공지글 조회 (고객센터용)
+-------------------------------------------------------- */
 router.get("/", async (req, res) => {
   try {
-    const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
+    const inquiries = await Inquiry.find()
+      .sort({ isNotice: -1, createdAt: -1 });
     res.json(inquiries);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ 모든 문의글 + 공지글 조회 (/all 별칭)
+/* --------------------------------------------------------
+ ✅ (2) 모든 문의글 + 공지글 조회 (/all 별칭)
+-------------------------------------------------------- */
 router.get("/all", async (req, res) => {
   try {
-    const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
+    const inquiries = await Inquiry.find()
+      .sort({ isNotice: -1, createdAt: -1 });
     res.json(inquiries);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ 특정 상품 문의 목록 (공지글 포함)
+/* --------------------------------------------------------
+ ✅ (3) 특정 상품 문의 목록 (공지글 제외)
+-------------------------------------------------------- */
 router.get("/:productId", async (req, res, next) => {
-  if (req.params.productId === "notice" || req.params.productId === "all") {
+  const { productId } = req.params;
+
+  // ✅ "notice"나 "all" 키워드는 상위 라우트로 넘김
+  if (productId === "notice" || productId === "all") {
     return next();
   }
 
   try {
+    // ✅ productId 유효성 검사
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "잘못된 상품 ID 형식입니다." });
+    }
+
+    // ✅ 해당 상품의 문의만 조회 (공지글 제외)
     const inquiries = await Inquiry.find({
-      $or: [
-        { productId: req.params.productId },
-        { isNotice: true },
-      ],
-    }).sort({ isNotice: -1, createdAt: -1 });
+      productId,
+      isNotice: { $ne: true }, // ✅ 공지글 제외
+    })
+      .sort({ createdAt: -1 });
 
     res.json(inquiries);
   } catch (err) {
+    console.error("❌ 상품 문의 불러오기 실패:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ 문의 등록 (일반 사용자)
+/* --------------------------------------------------------
+ ✅ (4) 문의 등록 (일반 사용자)
+-------------------------------------------------------- */
 router.post("/", async (req, res) => {
   try {
     const { email, question, answer, isPrivate, productId } = req.body;
@@ -99,7 +120,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ 공지글 등록 (관리자 전용)
+/* --------------------------------------------------------
+ ✅ (5) 공지글 등록 (관리자 전용)
+-------------------------------------------------------- */
 router.post("/notice", async (req, res) => {
   try {
     const { question, answer } = req.body;
@@ -114,6 +137,7 @@ router.post("/notice", async (req, res) => {
       answer,
       isNotice: true,
       isPrivate: false,
+      productId: undefined, // ✅ 공지글에는 상품 ID 없음
     });
 
     await newNotice.save();
@@ -128,7 +152,9 @@ router.post("/notice", async (req, res) => {
   }
 });
 
-// ✅ 관리자 답변 등록/수정
+/* --------------------------------------------------------
+ ✅ (6) 관리자 답변 등록/수정
+-------------------------------------------------------- */
 router.post("/:id/reply", async (req, res) => {
   try {
     const { reply } = req.body;

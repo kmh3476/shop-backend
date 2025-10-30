@@ -1,6 +1,8 @@
 // 📁 C:\Users\Kn\Project\shop-backend\routes\reviewRoutes.js
 import express from "express";
+import mongoose from "mongoose";
 import Review from "../models/Review.js";
+import Product from "../models/Product.js";
 
 const router = express.Router();
 
@@ -11,15 +13,23 @@ router.get("/:productId", async (req, res) => {
   try {
     const { productId } = req.params;
 
-    if (!productId) {
-      return res.status(400).json({ message: "상품 ID가 필요합니다." });
+    // ✅ 상품 ID 유효성 검사
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "잘못된 상품 ID 형식입니다." });
     }
 
+    // ✅ 실제 상품 존재 여부 확인
+    const productExists = await Product.exists({ _id: productId });
+    if (!productExists) {
+      return res.status(404).json({ message: "해당 상품을 찾을 수 없습니다." });
+    }
+
+    // ✅ 특정 상품의 리뷰만 가져오기
     const reviews = await Review.find({ productId }).sort({ createdAt: -1 });
 
     if (!reviews || reviews.length === 0) {
       console.warn(`⚠️ 리뷰 없음: productId=${productId}`);
-      return res.status(200).json([]); // 빈 배열로 응답 (404 대신)
+      return res.status(200).json([]); // 빈 배열로 응답
     }
 
     res.json(reviews);
@@ -44,6 +54,17 @@ router.post("/", async (req, res) => {
       return res.status(400).json({
         message: "productId, rating, comment는 필수 항목입니다.",
       });
+    }
+
+    // ✅ 상품 ID 유효성 검증
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "잘못된 상품 ID입니다." });
+    }
+
+    // ✅ 상품 존재 여부 확인
+    const productExists = await Product.exists({ _id: productId });
+    if (!productExists) {
+      return res.status(404).json({ message: "존재하지 않는 상품입니다." });
     }
 
     // ✅ 사용자명 기본값 처리
@@ -134,7 +155,11 @@ router.delete("/:id", async (req, res) => {
 -------------------------------------------------------- */
 router.get("/", async (req, res) => {
   try {
-    const reviews = await Review.find().sort({ createdAt: -1 });
+    // ✅ productId가 유효하지 않은 리뷰는 제외
+    const reviews = await Review.find({
+      productId: { $exists: true, $ne: null },
+    }).sort({ createdAt: -1 });
+
     res.json(reviews);
   } catch (err) {
     console.error("❌ 전체 리뷰 조회 실패:", err);
