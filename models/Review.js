@@ -6,7 +6,7 @@ const reviewSchema = new mongoose.Schema(
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      required: true,
+      required: [true, "상품 ID(productId)는 필수입니다."],
     },
     userName: {
       type: String,
@@ -40,20 +40,44 @@ const reviewSchema = new mongoose.Schema(
 // 🔹 인덱스 추가 (조회 성능 향상)
 reviewSchema.index({ productId: 1, createdAt: -1 });
 
-// 🔹 데이터 정리용 미들웨어 (불필요한 공백 제거 등)
-reviewSchema.pre("save", function (next) {
-    if (this.comment) {
-      this.comment = this.comment.trim();
-    }
-    if (this.userName) {
-      this.userName = this.userName.trim();
-    }
-    next();
+/* --------------------------------------------------------
+✅ (1) productId 유효성 검사: undefined/null/비정상 ObjectId 방지
+-------------------------------------------------------- */
+reviewSchema.pre("validate", function (next) {
+  if (!this.productId) {
+    return next(new Error("❌ productId가 누락되었습니다. 리뷰 저장이 취소됩니다."));
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(this.productId)) {
+    return next(new Error("❌ 잘못된 productId 형식입니다."));
+  }
+
+  next();
 });
 
-// 🔹 정적 메서드: 특정 상품 리뷰 조회 (빈 배열 방지)
+/* --------------------------------------------------------
+✅ (2) 저장 전 데이터 정리 (공백 제거)
+-------------------------------------------------------- */
+reviewSchema.pre("save", function (next) {
+  if (this.comment) {
+    this.comment = this.comment.trim();
+  }
+  if (this.userName) {
+    this.userName = this.userName.trim();
+  }
+  next();
+});
+
+/* --------------------------------------------------------
+✅ (3) 정적 메서드: 특정 상품 리뷰 조회 (빈 배열 방지)
+-------------------------------------------------------- */
 reviewSchema.statics.findByProduct = async function (productId) {
   try {
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      console.warn("⚠️ 잘못된 productId 요청:", productId);
+      return [];
+    }
+
     const reviews = await this.find({ productId }).sort({ createdAt: -1 });
     return reviews || [];
   } catch (error) {
@@ -61,5 +85,19 @@ reviewSchema.statics.findByProduct = async function (productId) {
     return [];
   }
 };
+
+/* --------------------------------------------------------
+✅ (4) 잘못된 데이터 자동 정리 (선택적 실행)
+-------------------------------------------------------- */
+// ⚠️ 선택사항: 불필요한 테스트 리뷰가 많다면 아래 주석 해제 가능
+// reviewSchema.post("init", async function () {
+//   await this.model("Review").deleteMany({
+//     $or: [
+//       { productId: { $exists: false } },
+//       { productId: null },
+//       { productId: "" }
+//     ],
+//   });
+// });
 
 export default mongoose.model("Review", reviewSchema);
