@@ -63,7 +63,7 @@ router.post("/send-email-code", async (req, res) => {
       html: `
         <div style="font-family:Arial,sans-serif;line-height:1.6">
           <h2>Shop Onyou 이메일 인증</h2>
-          <p>안녕하세요! 아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
+          <p>아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
           <div style="font-size:22px;font-weight:bold;color:#007bff;">${code}</div>
           <p>이 코드는 10분 동안만 유효합니다.<br/>감사합니다.<br/>- Onyou 팀</p>
         </div>
@@ -138,9 +138,17 @@ router.post("/signup", async (req, res) => {
       { expiresIn: "1d" }
     );
 
+    // ✅ refresh token 발급 추가
+    const refreshToken = jwt.sign(
+      { id: newUser._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
     res.status(201).json({
       message: "회원가입이 완료되었습니다.",
       token,
+      refreshToken,
       user: {
         id: newUser._id,
         userId: newUser.userId,
@@ -166,7 +174,6 @@ router.post("/login", async (req, res) => {
         .status(400)
         .json({ message: "아이디(또는 이메일)와 비밀번호를 입력해주세요." });
 
-    // ✅ 비밀번호 select:false 이므로 강제 포함
     const user = await User.findOne({
       $or: [{ email: loginInput }, { userId: loginInput }],
     }).select("+password");
@@ -177,31 +184,27 @@ router.post("/login", async (req, res) => {
     if (!user.emailVerified)
       return res.status(400).json({ message: "이메일 인증 후 로그인할 수 있습니다." });
 
-    // ✅ bcrypt.compare 전에 user.password 검증
-    if (!user.password) {
-      console.error("❌ DB에서 비밀번호가 조회되지 않음:", user.userId);
-      return res.status(500).json({ message: "서버 설정 오류: password 필드 누락" });
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
       return res.status(400).json({ message: "비밀번호가 틀립니다." });
 
-    // ✅ JWT_SECRET 검증
-    if (!process.env.JWT_SECRET) {
-      console.error("❌ JWT_SECRET 누락됨 (.env 확인 필요)");
-      return res.status(500).json({ message: "서버 보안 키 누락 (관리자에게 문의)" });
-    }
-
+    // ✅ access + refresh token 동시 발급
     const token = jwt.sign(
       { id: user._id, email: user.email, isAdmin: user.isAdmin },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1h" } // ⏰ 더 짧게 설정
+    );
+
+    const refreshToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
     );
 
     res.json({
       message: "로그인 성공",
       token,
+      refreshToken,
       user: {
         id: user._id,
         userId: user.userId,
@@ -213,6 +216,25 @@ router.post("/login", async (req, res) => {
   } catch (err) {
     console.error("로그인 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다.", error: err.message });
+  }
+});
+
+/* -------------------- ✅ 🔄 Refresh Token 으로 Access Token 재발급 -------------------- */
+router.post("/refresh", async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(401).json({ message: "리프레시 토큰이 없습니다." });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    const newAccess = jwt.sign(
+      { id: decoded.id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    res.json({ token: newAccess });
+  } catch (err) {
+    console.error("❌ 리프레시 토큰 검증 실패:", err);
+    res.status(403).json({ message: "유효하지 않거나 만료된 리프레시 토큰입니다." });
   }
 });
 
@@ -254,34 +276,6 @@ router.post("/forgot", async (req, res) => {
     res.json({ message: "비밀번호 재설정 링크를 이메일로 전송했습니다." });
   } catch (err) {
     console.error("비밀번호 재설정 오류:", err);
-    res.status(500).json({ message: "서버 오류가 발생했습니다." });
-  }
-});
-
-/* -------------------- ✅ 실제 비밀번호 재설정 -------------------- */
-router.post("/reset-password", async (req, res) => {
-  try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword)
-      return res.status(400).json({ message: "유효하지 않은 요청입니다." });
-
-    const user = await User.findOne({
-      resetToken: token,
-      resetExpires: { $gt: Date.now() },
-    });
-
-    if (!user)
-      return res.status(400).json({ message: "토큰이 유효하지 않거나 만료되었습니다." });
-
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
-    user.resetToken = undefined;
-    user.resetExpires = undefined;
-    await user.save();
-
-    res.json({ message: "비밀번호가 성공적으로 재설정되었습니다." });
-  } catch (err) {
-    console.error("비밀번호 재설정 처리 오류:", err);
     res.status(500).json({ message: "서버 오류가 발생했습니다." });
   }
 });
