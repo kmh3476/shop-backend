@@ -1,17 +1,36 @@
 // 📁 routes/productRoutes.js
 import express from "express";
-import mongoose from "mongoose"; // ✅ 추가
+import mongoose from "mongoose";
 import Product from "../models/Product.js";
 
 const router = express.Router();
 
-// ✅ 상품 전체 조회
+/* ==========================================================
+   ✅ 상품 전체 조회 (카테고리 필터 추가됨)
+   /api/products?categoryName=recommend
+   /api/products?isRecommended=true
+========================================================== */
 router.get("/", async (req, res) => {
   try {
+    const { categoryName, isRecommended } = req.query; // ✅ 쿼리 파라미터 받기
+
+    const filter = {};
+
+    // ✅ categoryName으로 필터링 (ex: recommend, outer 등)
+    if (categoryName) {
+      filter.categoryName = categoryName;
+    }
+
+    // ✅ isRecommended=true인 상품만
+    if (isRecommended === "true") {
+      filter.isRecommended = true;
+    }
+
     // 🔧 PageSetting 연결된 탭 정보도 같이 가져오도록 populate 추가
-    const products = await Product.find()
+    const products = await Product.find(filter)
       .populate("categoryPage")
       .sort({ createdAt: -1 });
+
     res.json(products);
   } catch (err) {
     console.error("❌ 상품 조회 실패:", err);
@@ -19,10 +38,11 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ 상품 상세 조회 (상세페이지용)
+/* ==========================================================
+   ✅ 상품 상세 조회
+========================================================== */
 router.get("/:id", async (req, res) => {
   try {
-    // 🔧 상세에서도 탭 정보 표시 가능하도록 populate
     const product = await Product.findById(req.params.id).populate("categoryPage");
     if (!product) {
       return res.status(404).json({ error: "상품을 찾을 수 없습니다." });
@@ -34,7 +54,9 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ✅ 상품 추가 (여러 장 + 대표 이미지 + 탭(categoryPage))
+/* ==========================================================
+   ✅ 상품 추가 (여러 장 + 대표 이미지 + 탭 연결)
+========================================================== */
 router.post("/", async (req, res) => {
   try {
     const {
@@ -44,40 +66,43 @@ router.post("/", async (req, res) => {
       imageUrl,
       images,
       mainImage,
-      categoryPage, // 🔧 탭 선택 추가
+      categoryPage, // ObjectId
     } = req.body;
 
     if (!name || !price) {
       return res.status(400).json({ error: "상품명과 가격은 필수입니다." });
     }
 
-    // ✅ 이미지 정리
     const imageArray =
       Array.isArray(images) && images.length > 0
         ? images.filter(Boolean)
         : [imageUrl?.trim() || "https://placehold.co/250x200?text=No+Image"];
 
-    // ✅ 대표 이미지(mainImage)가 유효하지 않으면 첫 번째 이미지로 대체
     const resolvedMain =
       mainImage && imageArray.includes(mainImage)
         ? mainImage
         : imageArray[0];
 
-    // 🔧 categoryPage ObjectId 변환하여 저장
     const newProduct = new Product({
       name,
       price,
       description,
-      image: resolvedMain, // 단일 이미지 필드(호환용)
+      image: resolvedMain,
       images: imageArray,
-      mainImage: resolvedMain, // ✅ 대표 이미지 필드 저장
-      categoryPage: categoryPage
-        ? new mongoose.Types.ObjectId(categoryPage)
-        : null, // ✅ 문자열 → ObjectId 변환
+      mainImage: resolvedMain,
+      categoryPage: categoryPage ? new mongoose.Types.ObjectId(categoryPage) : null,
     });
 
+    // ✅ PageSetting.name → categoryName 자동 동기화
+    if (categoryPage) {
+      const PageSetting = mongoose.model("PageSetting");
+      const page = await PageSetting.findById(categoryPage).lean();
+      if (page && page.name) {
+        newProduct.categoryName = page.name;
+      }
+    }
+
     const saved = await newProduct.save();
-    // 🔧 저장 후 populate된 버전 응답
     const populated = await Product.findById(saved._id).populate("categoryPage");
     res.status(201).json(populated);
   } catch (err) {
@@ -86,7 +111,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ 상품 수정 (여러 장 + 대표 이미지 + 탭 변경 가능)
+/* ==========================================================
+   ✅ 상품 수정 (탭 변경 포함)
+========================================================== */
 router.put("/:id", async (req, res) => {
   try {
     const {
@@ -96,22 +123,19 @@ router.put("/:id", async (req, res) => {
       imageUrl,
       images,
       mainImage,
-      categoryPage, // 🔧 탭 수정 추가
+      categoryPage,
     } = req.body;
 
     const product = await Product.findById(req.params.id);
-
     if (!product) {
       return res.status(404).json({ error: "상품을 찾을 수 없습니다." });
     }
 
-    // ✅ 필드 업데이트
     if (name) product.name = name;
     if (price) product.price = price;
     if (description) product.description = description;
     if (imageUrl) product.image = imageUrl;
 
-    // ✅ 여러 장 이미지
     if (Array.isArray(images)) {
       const cleanImages = images.filter(Boolean);
       product.images =
@@ -120,22 +144,30 @@ router.put("/:id", async (req, res) => {
           : [product.image || "https://placehold.co/250x200?text=No+Image"];
     }
 
-    // ✅ 대표 이미지 변경 (없으면 첫 번째 이미지로 대체)
     if (mainImage && product.images.includes(mainImage)) {
       product.mainImage = mainImage;
     } else if (!product.mainImage || !product.images.includes(product.mainImage)) {
       product.mainImage = product.images[0];
     }
 
-    // 🔧 categoryPage(탭) 수정 가능하게 ObjectId 변환
     if (categoryPage !== undefined) {
       product.categoryPage = categoryPage
         ? new mongoose.Types.ObjectId(categoryPage)
         : null;
+
+      // ✅ categoryName도 자동 갱신
+      if (categoryPage) {
+        const PageSetting = mongoose.model("PageSetting");
+        const page = await PageSetting.findById(categoryPage).lean();
+        if (page && page.name) {
+          product.categoryName = page.name;
+        }
+      } else {
+        product.categoryName = "default";
+      }
     }
 
     const updated = await product.save();
-    // 🔧 populate된 상태로 응답
     const populated = await Product.findById(updated._id).populate("categoryPage");
     res.json(populated);
   } catch (err) {
@@ -144,7 +176,9 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ 상품 삭제
+/* ==========================================================
+   ✅ 상품 삭제
+========================================================== */
 router.delete("/:id", async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);

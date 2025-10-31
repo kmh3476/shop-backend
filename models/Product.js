@@ -32,6 +32,20 @@ const ProductSchema = new mongoose.Schema(
       ref: "PageSetting", // 🔧 반드시 PageSetting과 일치해야 함
       default: null,
     },
+
+    // ✅ 탭 이름 기반 분류 필드 (예: "recommend", "outer", "pants")
+    // PageSetting.name 값과 동일하게 저장됨 → 프론트에서 간단히 필터 가능
+    categoryName: {
+      type: String,
+      default: "default",
+      index: true, // 🔍 빠른 검색용 인덱스 추가
+    },
+
+    // ✅ 추가 확장 필드 (예: 추천상품 여부, 품절 여부 등)
+    isRecommended: {
+      type: Boolean,
+      default: false, // true면 홈 화면 추천상품에 노출
+    },
   },
   {
     timestamps: true, // ✅ createdAt, updatedAt 자동 생성
@@ -46,6 +60,23 @@ ProductSchema.virtual("pageLabel", {
   localField: "categoryPage",
   foreignField: "_id",
   justOne: true,
+});
+
+// ✅ pre-save 훅: categoryPage 연결 시 자동으로 categoryName도 동기화
+ProductSchema.pre("save", async function (next) {
+  try {
+    if (this.categoryPage) {
+      const PageSetting = mongoose.model("PageSetting");
+      const page = await PageSetting.findById(this.categoryPage).lean();
+      if (page && page.name) {
+        this.categoryName = page.name; // 🔁 자동 동기화
+      }
+    }
+    next();
+  } catch (err) {
+    console.error("❌ categoryName 자동 동기화 실패:", err);
+    next(err);
+  }
 });
 
 // ✅ 모델 중복 등록 방지 (Render/Vercel 환경에서 중요)
