@@ -1,7 +1,7 @@
 // 📁 routes/pageSettingRoutes.js
 import express from "express";
 import PageSetting from "../models/PageSetting.js";
-import { protect } from "../middleware/authMiddleware.js";
+import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -20,7 +20,9 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const page = await PageSetting.findById(req.params.id);
-    if (!page) return res.status(404).json({ message: "탭을 찾을 수 없습니다" });
+    if (!page) {
+      return res.status(404).json({ message: "탭을 찾을 수 없습니다" });
+    }
     res.json(page);
   } catch (err) {
     console.error("❌ 단일 탭 조회 실패:", err);
@@ -29,20 +31,28 @@ router.get("/:id", async (req, res) => {
 });
 
 // ✅ 새 탭 추가 (관리자만)
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, adminOnly, async (req, res) => {
   try {
-    const { name, label, order } = req.body;
+    const { name, label, order, image } = req.body;
+
     if (!name || !label) {
       return res.status(400).json({ message: "name과 label은 필수입니다" });
     }
 
-    // 동일한 name 중복 방지
+    // ✅ 중복 방지
     const exists = await PageSetting.findOne({ name });
     if (exists) {
       return res.status(400).json({ message: "이미 존재하는 탭 name입니다" });
     }
 
-    const newPage = new PageSetting({ name, label, order });
+    // ✅ 새 탭 생성
+    const newPage = new PageSetting({
+      name,
+      label,
+      order,
+      image: image || "",
+    });
+
     await newPage.save();
     res.status(201).json(newPage);
   } catch (err) {
@@ -52,15 +62,16 @@ router.post("/", protect, async (req, res) => {
 });
 
 // ✅ 탭 수정
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, adminOnly, async (req, res) => {
   try {
-    const updated = await PageSetting.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-    if (!updated)
+    const updated = await PageSetting.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+
+    if (!updated) {
       return res.status(404).json({ message: "수정할 탭을 찾을 수 없습니다" });
+    }
+
     res.json(updated);
   } catch (err) {
     console.error("❌ 탭 수정 실패:", err);
@@ -69,22 +80,25 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // ✅ 탭 삭제
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, adminOnly, async (req, res) => {
   try {
     const deleted = await PageSetting.findByIdAndDelete(req.params.id);
-    if (!deleted)
+    if (!deleted) {
       return res.status(404).json({ message: "삭제할 탭을 찾을 수 없습니다" });
-    res.json({ message: "Deleted" });
+    }
+
+    res.json({ message: "탭이 삭제되었습니다." });
   } catch (err) {
     console.error("❌ 탭 삭제 실패:", err);
     res.status(500).json({ message: "서버 오류: 탭 삭제 실패" });
   }
 });
 
-// ✅ 순서 변경 (드래그앤드롭 지원용 선택적 추가)
-router.patch("/reorder", protect, async (req, res) => {
+// ✅ 순서 변경 (드래그앤드롭 지원)
+router.patch("/reorder", protect, adminOnly, async (req, res) => {
   try {
     const { orderData } = req.body; // [{id, order}, ...]
+
     if (!Array.isArray(orderData)) {
       return res.status(400).json({ message: "orderData 배열이 필요합니다" });
     }
@@ -106,6 +120,14 @@ router.patch("/reorder", protect, async (req, res) => {
     console.error("❌ 탭 순서 변경 실패:", err);
     res.status(500).json({ message: "서버 오류: 순서 변경 실패" });
   }
+});
+
+// ✅ 잘못된 요청 대응 (404)
+router.all("*", (req, res) => {
+  res.status(404).json({
+    message: "요청한 페이지 설정 경로를 찾을 수 없습니다.",
+    route: req.originalUrl,
+  });
 });
 
 // ✅ ESM 환경에서는 반드시 default export 필요
