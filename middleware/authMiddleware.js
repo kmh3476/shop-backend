@@ -32,6 +32,11 @@ export const protect = async (req, res, next) => {
         .json({ message: "서버 설정 오류 (JWT_SECRET 누락)" });
     }
 
+    // ✅ 🔒 Refresh 토큰 요청은 인증 건너뛰기
+    if (req.originalUrl.includes("/api/auth/refresh")) {
+      return next(); // 🔥 refresh 요청은 protect 제외
+    }
+
     // ✅ 토큰 검증
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
