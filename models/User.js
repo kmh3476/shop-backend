@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "비밀번호는 필수입니다."],
       minlength: [6, "비밀번호는 최소 6자 이상이어야 합니다."],
-      select: false, // ✅ 수정: 기본적으로 응답에 포함되지 않도록 설정
+      select: false, // ✅ 응답에서 제외
     },
 
     // ✅ 전화번호 (선택)
@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
-    // ✅ 비밀번호 재설정용 토큰 (Resend 기반)
+    // ✅ 비밀번호 재설정용 토큰
     resetToken: {
       type: String,
       default: null,
@@ -77,12 +77,19 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // ✅ 🔥 추가: refreshToken 필드 (선택)
+    // 클라이언트나 DB 캐시 없이 서버에서 직접 관리할 경우를 대비
+    refreshToken: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );
-
 // ✅ 저장 전에 비밀번호 자동 해싱
 userSchema.pre("save", async function (next) {
+  // 비밀번호가 수정되지 않았다면 건너뜀
   if (!this.isModified("password")) return next();
 
   try {
@@ -99,20 +106,20 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// ✅ 관리자 여부 확인용 메서드 (선택)
+// ✅ 관리자 여부 확인용 메서드
 userSchema.methods.isAdminUser = function () {
   return this.isAdmin === true;
 };
 
-// ✅ 수정: JSON 변환 시 비밀번호 제거 + isAdmin 포함 보장
+// ✅ JSON 변환 시 비밀번호 제거 + isAdmin 포함
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.password;
-  obj.isAdmin = this.isAdmin === true; // 명시적 보장
+  obj.isAdmin = this.isAdmin === true;
   return obj;
 };
 
-// ✅ 수정: 관리자만 필터링하는 헬퍼 메서드 (선택)
+// ✅ 관리자만 필터링하는 헬퍼 메서드 (선택)
 userSchema.statics.findAdmins = async function () {
   return this.find({ isAdmin: true });
 };
