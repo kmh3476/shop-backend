@@ -4,8 +4,10 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
-import { fileURLToPath } from "url"; // ✅ ESModule용 __dirname 대체
-import morgan from "morgan"; // ✅ 요청 로그용 미들웨어 추가
+import { fileURLToPath } from "url";
+import morgan from "morgan";
+import fileUpload from "express-fileupload"; // ✅ Cloudinary 파일 업로드 지원용 추가
+import cloudinary from "cloudinary"; // ✅ Cloudinary 라이브러리 추가
 
 // ✅ 라우트 불러오기
 import uploadRouter from "./routes/upload.js";
@@ -15,16 +17,23 @@ import inquiryRoutes from "./routes/inquiryRoutes.js";
 import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
 import verifyRoutes from "./routes/verify.js";
-import supportRoutes from "./routes/support.js"; // ✅ 고객센터 문의 라우트
-import pageSettingRoutes from "./routes/pageSettingRoutes.js"; // ✅ 탭(페이지) 설정 라우트
+import supportRoutes from "./routes/support.js";
+import pageSettingRoutes from "./routes/pageSettingRoutes.js";
 
 import { protect, adminOnly } from "./middleware/authMiddleware.js";
 
 dotenv.config();
 const app = express();
 
-/* -------------------- ✅ 프록시 환경 설정 (Render, Vercel 등) -------------------- */
-// ⚠️ express-rate-limit 오류 해결 & 클라이언트 IP 인식 가능하게
+/* -------------------- ✅ Cloudinary 설정 -------------------- */
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+console.log("☁️ Cloudinary 설정 완료");
+
+/* -------------------- ✅ 프록시 환경 설정 -------------------- */
 app.set("trust proxy", 1);
 
 /* -------------------- ✅ CORS 설정 -------------------- */
@@ -32,9 +41,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : [
       "http://localhost:5173",
-      "https://project-onyou.vercel.app", // ✅ Vercel 프론트엔드
-      "https://shop-backend-1-dfsl.onrender.com", // ✅ Render 백엔드
-      "https://onyou.store", // ✅ 실제 도메인
+      "https://project-onyou.vercel.app",
+      "https://shop-backend-1-dfsl.onrender.com",
+      "https://onyou.store",
     ];
 
 app.use(
@@ -48,17 +57,18 @@ app.use(
       }
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
 // ✅ preflight 요청 허용
 app.options("*", cors());
 
-/* -------------------- ✅ 요청 로그 (개발 및 디버깅용) -------------------- */
+/* -------------------- ✅ 요청 로그 -------------------- */
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));
 } else {
-  // 🚀 배포 환경에선 요약된 로그
   app.use(
     morgan("tiny", {
       skip: (req, res) => res.statusCode < 400,
@@ -66,10 +76,15 @@ if (process.env.NODE_ENV !== "production") {
   );
 }
 
-/* -------------------- ✅ JSON & URL 파싱 -------------------- */
+/* -------------------- ✅ 요청 본문 파서 및 파일 업로드 허용 -------------------- */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+  })
+);
 /* -------------------- ✅ MongoDB 연결 -------------------- */
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -80,14 +95,12 @@ mongoose
   .then(() => console.log("✅ MongoDB 연결 성공"))
   .catch((err) => {
     console.error("❌ MongoDB 연결 실패:", err.message);
-    process.exit(1); // DB 연결 실패 시 서버 강제 종료 (안전)
+    process.exit(1);
   });
 
 /* -------------------- ✅ 정적 파일 경로 -------------------- */
-// ⚠️ ESModule 환경에서는 __dirname 직접 사용 불가 → 아래 코드 필수
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* -------------------- ✅ 기본 라우트 -------------------- */
@@ -102,27 +115,53 @@ app.get("/", (req, res) => {
       inquiries: "/api/inquiries",
       auth: "/api/auth/login",
       support: "/api/support",
+      upload: "/api/upload",
     },
   });
 });
 
+/* -------------------- ✅ 업로드 라우트: Cloudinary (보강) -------------------- */
+app.post("/api/upload", async (req, res) => {
+  try {
+    if (!req.files || !req.files.image) {
+      return res.status(400).json({ message: "이미지 파일이 없습니다." });
+    }
+
+    const file = req.files.image.tempFilePath;
+
+    // ✅ 업로드 Preset 적용 (Unsigned preset: onyou_uploads)
+    const result = await cloudinary.v2.uploader.upload(file, {
+      upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET || "onyou_uploads",
+      folder: "products/",
+      resource_type: "image",
+    });
+
+    console.log("✅ Cloudinary 업로드 성공:", result.secure_url);
+    res.json({ imageUrl: result.secure_url });
+  } catch (err) {
+    console.error("❌ Cloudinary 업로드 실패:", err);
+    res.status(500).json({
+      message: "이미지 업로드 실패",
+      error: err.message,
+    });
+  }
+});
+
 /* -------------------- ✅ 실제 API 라우트 -------------------- */
-app.use("/api/upload", uploadRouter);
 app.use("/api/products", productRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/verify", verifyRoutes);
-app.use("/api/support", supportRoutes); // ✅ 고객센터 문의 라우트
+app.use("/api/support", supportRoutes);
 app.use("/api/admin", protect, adminOnly, adminRoutes);
-app.use("/api/pages", pageSettingRoutes); // ✅ 페이지(탭) 설정 라우트
+app.use("/api/pages", pageSettingRoutes);
 
-/* -------------------- ✅ 호환용 구버전 라우트 (404 방지용) -------------------- */
-// ✅ 프론트에서 /pages, /products 로 요청하는 경우를 위해 추가
+/* -------------------- ✅ 호환용 구버전 라우트 -------------------- */
 app.use("/pages", pageSettingRoutes);
 app.use("/products", productRoutes);
 
-/* -------------------- ✅ 프론트엔드 URL 자동 안내 라우트 -------------------- */
+/* -------------------- ✅ /auth 오용 경고 -------------------- */
 app.use("/auth", (req, res) => {
   res.status(400).json({
     success: false,
@@ -131,7 +170,6 @@ app.use("/auth", (req, res) => {
     correctEndpoint: "/api/auth/login",
   });
 });
-
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
 app.use((err, req, res, next) => {
   console.error("🔥 서버 에러 발생:", err.stack || err.message);
@@ -179,7 +217,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     success: false,
     message: "서버 내부 오류가 발생했습니다.",
-    error: process.env.NODE_ENV === "production" ? undefined : err.message,
+    error:
+      process.env.NODE_ENV === "production" ? undefined : err.message,
   });
 });
 
@@ -188,7 +227,18 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
-  console.log(`📡 Auth endpoint: /api/auth/login`);
-  console.log(`🌐 CORS 허용 도메인:`);
+  console.log(`🌐 CORS 허용 도메인 목록:`);
   allowedOrigins.forEach((o) => console.log("  •", o));
+
+  // ✅ Cloudinary 설정 로그
+  if (
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_UPLOAD_PRESET
+  ) {
+    console.log(
+      `☁️ Cloudinary 연결됨 → ${process.env.CLOUDINARY_CLOUD_NAME}/${process.env.CLOUDINARY_UPLOAD_PRESET}`
+    );
+  } else {
+    console.warn("⚠️ Cloudinary 환경 변수가 누락되었습니다.");
+  }
 });
