@@ -39,21 +39,15 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // SSR, Postman 등 허용
-      const allowed = allowedOrigins.some((o) => {
-        const base = o.replace(/https?:\/\//, "");
-        return origin.includes(base);
-      });
-      if (allowed) callback(null, true);
-      else {
-        console.warn(`🚫 차단된 CORS 요청: ${origin}`);
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log("🚫 차단된 CORS 요청:", origin);
         callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
       }
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
