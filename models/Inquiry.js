@@ -91,16 +91,15 @@ inquirySchema.pre("validate", function (next) {
     return next();
   }
 
-  // 🔹 일반 문의일 경우 productId 반드시 필요
-  if (!this.isNotice) {
-    if (!this.productId) {
-      return next(new Error("상품 문의에는 productId가 필요합니다."));
-    }
+  /* 🔹 사용자 문의(고객센터 탭)일 경우 productId 없이도 허용 */
+  if (!this.isNotice && !this.productId) {
+    this.productId = undefined; // 명시적으로 제거
+    return next();
+  }
 
-    // 🔹 productId가 ObjectId 형식인지 확인
-    if (!mongoose.Types.ObjectId.isValid(this.productId)) {
-      return next(new Error("잘못된 상품 ID 형식입니다."));
-    }
+  // 🔹 상품 문의일 경우 productId 반드시 유효해야 함
+  if (this.productId && !mongoose.Types.ObjectId.isValid(this.productId)) {
+    return next(new Error("잘못된 상품 ID 형식입니다."));
   }
 
   next();
@@ -147,7 +146,6 @@ inquirySchema.statics.findByProduct = async function (productId) {
     return [];
   }
 };
-
 /* --------------------------------------------------------
  ✅ (4) 인스턴스 메서드: 관리자 답변 추가
 -------------------------------------------------------- */
