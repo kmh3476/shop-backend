@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Inquiry from "../models/Inquiry.js";
 import { Resend } from "resend";
+import { protect } from "../middleware/authMiddleware.js";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const router = express.Router();
@@ -196,6 +197,35 @@ router.post("/:id/reply", async (req, res) => {
   } catch (err) {
     console.error("❌ 답변 등록 실패:", err);
     res.status(500).json({ message: err.message });
+  }
+});
+/* --------------------------------------------------------
+ ✅ (7) 문의 삭제 (본인 또는 관리자만)
+-------------------------------------------------------- */
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userEmail = req.user?.email;
+    const isAdmin = req.user?.isAdmin;
+
+    const inquiry = await Inquiry.findById(id);
+    if (!inquiry) {
+      return res.status(404).json({ message: "해당 문의를 찾을 수 없습니다." });
+    }
+
+    // ✅ 권한 확인: 작성자이거나 관리자일 경우만
+    const isOwner = inquiry.email === userEmail;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "삭제 권한이 없습니다." });
+    }
+
+    await Inquiry.findByIdAndDelete(id);
+    console.log(`🗑️ 문의 삭제됨: ${id} (요청자: ${userEmail || "관리자"})`);
+
+    res.json({ message: "문의가 성공적으로 삭제되었습니다." });
+  } catch (err) {
+    console.error("❌ 문의 삭제 실패:", err);
+    res.status(500).json({ message: "서버 오류로 삭제에 실패했습니다." });
   }
 });
 
