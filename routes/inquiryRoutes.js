@@ -3,7 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Inquiry from "../models/Inquiry.js";
 import { Resend } from "resend";
-import { protect } from "../middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js"; // ✅ 로그인 검증 추가
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const router = express.Router();
@@ -13,8 +13,7 @@ const router = express.Router();
 -------------------------------------------------------- */
 router.get("/", async (req, res) => {
   try {
-    const inquiries = await Inquiry.find()
-      .sort({ isNotice: -1, createdAt: -1 });
+    const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
     res.json(inquiries);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -26,8 +25,7 @@ router.get("/", async (req, res) => {
 -------------------------------------------------------- */
 router.get("/all", async (req, res) => {
   try {
-    const inquiries = await Inquiry.find()
-      .sort({ isNotice: -1, createdAt: -1 });
+    const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
     res.json(inquiries);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -54,9 +52,8 @@ router.get("/:productId", async (req, res, next) => {
     // ✅ 해당 상품의 문의만 조회 (공지글 제외)
     const inquiries = await Inquiry.find({
       productId,
-      isNotice: { $ne: true }, // ✅ 공지글 제외
-    })
-      .sort({ createdAt: -1 });
+      isNotice: { $ne: true },
+    }).sort({ createdAt: -1 });
 
     res.json(inquiries);
   } catch (err) {
@@ -66,15 +63,19 @@ router.get("/:productId", async (req, res, next) => {
 });
 
 /* --------------------------------------------------------
- ✅ (4) 문의 등록 (일반 사용자)
+ ✅ (4) 문의 등록 (로그인 필수 + 이메일 자동입력)
 -------------------------------------------------------- */
-router.post("/", async (req, res) => {
+router.post("/", protect, async (req, res) => {
   try {
-    const { email, question, answer, isPrivate, productId } = req.body;
+    const user = req.user;
+    const { question, answer, isPrivate, productId } = req.body;
 
     if (!question || !answer) {
       return res.status(400).json({ message: "제목과 내용을 모두 입력해주세요." });
     }
+
+    // ✅ 로그인된 유저의 이메일 자동 입력
+    const email = user?.email || "";
 
     const newInquiry = new Inquiry({
       userName: email || "익명",
@@ -83,16 +84,16 @@ router.post("/", async (req, res) => {
       isPrivate: isPrivate || false,
       isNotice: false,
       productId: productId || undefined,
-      email: email || "",
+      email,
     });
 
     await newInquiry.save();
 
-    // ✅ 문의 등록 후 이메일 발송
+    // ✅ 문의 등록 후 이메일 발송 (선택적)
     if (email) {
       try {
         await resend.emails.send({
-          from: "support@onyou.store", // ✅ 실제 Resend 인증된 도메인 사용
+          from: "support@onyou.store",
           to: email,
           subject: "[OnYou] 문의가 접수되었습니다.",
           html: `
@@ -120,16 +121,19 @@ router.post("/", async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
-
 /* --------------------------------------------------------
  ✅ (5) 공지글 등록 (관리자 전용)
 -------------------------------------------------------- */
-router.post("/notice", async (req, res) => {
+import { adminOnly } from "../middleware/authMiddleware.js"; // ✅ 관리자 검증 추가
+
+router.post("/notice", protect, adminOnly, async (req, res) => {
   try {
     const { question, answer } = req.body;
 
     if (!question || !answer) {
-      return res.status(400).json({ message: "공지 제목과 내용을 모두 입력해주세요." });
+      return res
+        .status(400)
+        .json({ message: "공지 제목과 내용을 모두 입력해주세요." });
     }
 
     const newNotice = new Inquiry({
@@ -138,7 +142,7 @@ router.post("/notice", async (req, res) => {
       answer,
       isNotice: true,
       isPrivate: false,
-      productId: undefined, // ✅ 공지글에는 상품 ID 없음
+      productId: undefined,
     });
 
     await newNotice.save();
@@ -156,7 +160,7 @@ router.post("/notice", async (req, res) => {
 /* --------------------------------------------------------
  ✅ (6) 관리자 답변 등록/수정
 -------------------------------------------------------- */
-router.post("/:id/reply", async (req, res) => {
+router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
     const { reply } = req.body;
     const inquiry = await Inquiry.findById(req.params.id);
@@ -199,33 +203,35 @@ router.post("/:id/reply", async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 /* --------------------------------------------------------
- ✅ (7) 문의 삭제 (본인 또는 관리자만)
+ ✅ (7) 문의 삭제 (본인 또는 관리자만 가능)
 -------------------------------------------------------- */
 router.delete("/:id", protect, async (req, res) => {
   try {
-    const { id } = req.params;
-    const userEmail = req.user?.email;
-    const isAdmin = req.user?.isAdmin;
-
-    const inquiry = await Inquiry.findById(id);
+    const inquiry = await Inquiry.findById(req.params.id);
     if (!inquiry) {
-      return res.status(404).json({ message: "해당 문의를 찾을 수 없습니다." });
+      return res.status(404).json({ message: "문의글을 찾을 수 없습니다." });
     }
 
-    // ✅ 권한 확인: 작성자이거나 관리자일 경우만
-    const isOwner = inquiry.email === userEmail;
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ message: "삭제 권한이 없습니다." });
+    const user = req.user;
+
+    // ✅ 본인 확인 또는 관리자 권한 확인
+    if (
+      !user.isAdmin &&
+      (!inquiry.email || inquiry.email !== user.email)
+    ) {
+      return res
+        .status(403)
+        .json({ message: "삭제 권한이 없습니다." });
     }
 
-    await Inquiry.findByIdAndDelete(id);
-    console.log(`🗑️ 문의 삭제됨: ${id} (요청자: ${userEmail || "관리자"})`);
+    await inquiry.deleteOne();
 
-    res.json({ message: "문의가 성공적으로 삭제되었습니다." });
+    res.json({ message: "문의가 삭제되었습니다." });
   } catch (err) {
     console.error("❌ 문의 삭제 실패:", err);
-    res.status(500).json({ message: "서버 오류로 삭제에 실패했습니다." });
+    res.status(500).json({ message: err.message });
   }
 });
 
