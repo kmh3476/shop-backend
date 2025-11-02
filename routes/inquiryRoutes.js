@@ -87,6 +87,8 @@ router.get("/:productId", async (req, res, next) => {
 
 router.post
 
+
+
 /* --------------------------------------------------------
  ✅ (5) 공지글 등록 (관리자 전용)
    → productId === 'product-page' → 상품공지
