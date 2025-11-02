@@ -142,7 +142,7 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
       answer,
       isNotice: true,
       isPrivate: false,
-      productId: undefined,
+      productId: req.body.productId || undefined,
     });
 
     await newNotice.save();
