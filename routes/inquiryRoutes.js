@@ -121,32 +121,37 @@ router.post("/", protect, async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+// 📁 inquiryRoutes.js
+
+import { protect, adminOnly } from "../middleware/authMiddleware.js"; // ✅ 관리자 권한 가져오기
+
 /* --------------------------------------------------------
  ✅ (5) 공지글 등록 (관리자 전용)
 -------------------------------------------------------- */
-import { adminOnly } from "../middleware/authMiddleware.js"; // ✅ 관리자 검증 추가
-
-router.post("/notice", async (req, res) => {
+router.post("/notice", protect, adminOnly, async (req, res) => {
   try {
-    const { question, answer, productId } = req.body; // ✅ productId 받아오기
+    const { question, answer, productId } = req.body;
 
     if (!question || !answer) {
       return res.status(400).json({ message: "공지 제목과 내용을 모두 입력해주세요." });
     }
 
+    // ✅ productId: 상품문의용은 "product-page", 일반 공지는 null
     const newNotice = new Inquiry({
       userName: "관리자",
       question,
       answer,
       isNotice: true,
       isPrivate: false,
-      productId: productId || null, // ✅ productId가 있으면 저장
+      productId: productId === "product-page" ? "product-page" : null,
     });
 
     await newNotice.save();
 
     res.status(201).json({
-      message: "공지글이 등록되었습니다.",
+      message: productId === "product-page"
+        ? "상품문의 공지가 등록되었습니다."
+        : "일반 공지가 등록되었습니다.",
       notice: newNotice,
     });
   } catch (err) {
@@ -154,6 +159,7 @@ router.post("/notice", async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+
 
 
 /* --------------------------------------------------------
