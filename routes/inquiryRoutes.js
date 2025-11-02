@@ -85,10 +85,46 @@ router.get("/:productId", async (req, res, next) => {
   }
 });
 
-router.post
+/* --------------------------------------------------------
+ ✅ (4) 문의 등록 (로그인 필수 + 이메일 자동입력)
+-------------------------------------------------------- */
+router.post("/", protect, async (req, res) => {
+  try {
+    const user = req.user;
+    const { question, answer, isPrivate, productId } = req.body;
 
+    if (!question || !answer) {
+      return res.status(400).json({ message: "제목과 내용을 모두 입력해주세요." });
+    }
 
+    // ✅ 로그인된 유저의 이메일 자동 입력
+    const email = user?.email || "";
 
+    const newInquiry = new Inquiry({
+      userName: email || "익명",
+      question,
+      answer,
+      isPrivate: isPrivate || false,
+      isNotice: false,
+      // ✅ 상품문의면 productId 저장, 아니면 undefined
+      productId: productId === "product-page" ? "product-page" : undefined,
+      email,
+    });
+
+    await newInquiry.save();
+
+    console.log("✅ 문의 등록 완료:", {
+      question,
+      email,
+      productId: newInquiry.productId || "(일반 문의)",
+    });
+
+    res.status(201).json(newInquiry);
+  } catch (err) {
+    console.error("❌ 문의 등록 실패:", err);
+    res.status(400).json({ message: err.message });
+  }
+});
 /* --------------------------------------------------------
  ✅ (5) 공지글 등록 (관리자 전용)
    → productId === 'product-page' → 상품공지
@@ -113,6 +149,11 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
 
     await newNotice.save();
 
+    console.log("✅ 공지 등록 완료:", {
+      question,
+      productId: newNotice.productId || "(일반 공지)",
+    });
+
     res.status(201).json({
       message:
         productId === "product-page"
@@ -125,6 +166,7 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+
 /* --------------------------------------------------------
  ✅ (6) 관리자 답변 등록 / 수정
 -------------------------------------------------------- */
@@ -139,8 +181,9 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
 
     inquiry.reply = reply;
     inquiry.repliedAt = new Date();
-
     await inquiry.save();
+
+    console.log(`📨 답변 등록 완료 (${inquiry._id})`);
 
     // ✅ 답변 이메일 발송
     if (inquiry.email) {
