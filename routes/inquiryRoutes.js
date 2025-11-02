@@ -3,7 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Inquiry from "../models/Inquiry.js";
 import { Resend } from "resend";
-import { protect } from "../middleware/authMiddleware.js"; // ✅ 로그인 검증 추가
+import { protect, adminOnly } from "../middleware/authMiddleware.js"; // ✅ 관리자 권한 가져오기
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const router = express.Router();
@@ -122,8 +122,6 @@ router.post("/", protect, async (req, res) => {
   }
 });
 // 📁 inquiryRoutes.js
-
-import { protect, adminOnly } from "../middleware/authMiddleware.js"; // ✅ 관리자 권한 가져오기
 
 /* --------------------------------------------------------
  ✅ (5) 공지글 등록 (관리자 전용)
