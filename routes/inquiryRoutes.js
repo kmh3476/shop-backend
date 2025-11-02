@@ -126,14 +126,12 @@ router.post("/", protect, async (req, res) => {
 -------------------------------------------------------- */
 import { adminOnly } from "../middleware/authMiddleware.js"; // ✅ 관리자 검증 추가
 
-router.post("/notice", protect, adminOnly, async (req, res) => {
+router.post("/notice", async (req, res) => {
   try {
-    const { question, answer } = req.body;
+    const { question, answer, productId } = req.body; // ✅ productId 받아오기
 
     if (!question || !answer) {
-      return res
-        .status(400)
-        .json({ message: "공지 제목과 내용을 모두 입력해주세요." });
+      return res.status(400).json({ message: "공지 제목과 내용을 모두 입력해주세요." });
     }
 
     const newNotice = new Inquiry({
@@ -142,7 +140,7 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
       answer,
       isNotice: true,
       isPrivate: false,
-      productId: req.body.productId || undefined,
+      productId: productId || null, // ✅ productId가 있으면 저장
     });
 
     await newNotice.save();
@@ -156,6 +154,7 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+
 
 /* --------------------------------------------------------
  ✅ (6) 관리자 답변 등록/수정
