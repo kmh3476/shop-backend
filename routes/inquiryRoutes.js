@@ -85,65 +85,7 @@ router.get("/:productId", async (req, res, next) => {
   }
 });
 
-/* --------------------------------------------------------
- ✅ (4) 문의 등록 (로그인 필수 + 이메일 자동입력)
-   → productId가 "product-page"면 상품문의로 저장
--------------------------------------------------------- */
-router.post("/", protect, async (req, res) => {
-  try {
-    const user = req.user;
-    const { question, answer, isPrivate, productId } = req.body;
-
-    if (!question || !answer) {
-      return res.status(400).json({ message: "제목과 내용을 모두 입력해주세요." });
-    }
-
-    const email = user?.email || "익명";
-
-    const newInquiry = new Inquiry({
-      userName: email,
-      question,
-      answer,
-      isPrivate: isPrivate || false,
-      isNotice: false,
-      productId: productId === "product-page" ? "product-page" : undefined,
-      email,
-    });
-
-    await newInquiry.save();
-
-    // ✅ 이메일 발송 (선택적)
-    if (email && email !== "익명") {
-      try {
-        await resend.emails.send({
-          from: "support@onyou.store",
-          to: email,
-          subject: "[OnYou] 문의가 정상적으로 접수되었습니다.",
-          html: `
-            <div style="font-family:sans-serif;line-height:1.6;color:#333">
-              <h2 style="color:#111">문의가 접수되었습니다.</h2>
-              <p>고객님의 문의가 아래와 같이 등록되었습니다.</p>
-              <hr style="border:none;border-top:1px solid #ddd;margin:10px 0"/>
-              <p><strong>제목:</strong> ${question}</p>
-              <p><strong>내용:</strong><br/>${answer}</p>
-              <hr style="border:none;border-top:1px solid #ddd;margin:10px 0"/>
-              <p>관리자가 확인 후 이메일로 답변드리겠습니다.</p>
-              <p>감사합니다.<br/><strong>OnYou 고객센터</strong></p>
-            </div>
-          `,
-        });
-        console.log("📧 문의 확인 메일 전송 완료:", email);
-      } catch (mailErr) {
-        console.error("📧 이메일 발송 실패:", mailErr);
-      }
-    }
-
-    res.status(201).json(newInquiry);
-  } catch (err) {
-    console.error("❌ 문의 등록 실패:", err);
-    res.status(400).json({ message: err.message });
-  }
-});
+router.post
 
 /* --------------------------------------------------------
  ✅ (5) 공지글 등록 (관리자 전용)
