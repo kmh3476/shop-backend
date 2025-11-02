@@ -271,7 +271,7 @@ router.delete("/:id", protect, async (req, res) => {
 
     await inquiry.deleteOne();
 
-    console.log(`✅ 문의(${inquiry._id}) 삭제 완료 - ${inquiry.question}`);
+      console.log(`✅ 문의(${inquiry._id}) 삭제 완료 - ${inquiry.question}`);
     res.json({ message: "문의가 삭제되었습니다." });
   } catch (err) {
     console.error("❌ 문의 삭제 실패:", err);

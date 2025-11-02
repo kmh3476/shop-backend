@@ -5,9 +5,10 @@ const inquirySchema = new mongoose.Schema(
   {
     // ✅ 상품 ID (공지글은 제외)
     productId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
+      // 🔥 기존 ObjectId → String 으로 변경
+      type: String,
       required: false, // 공지글은 productId 없이 작성 가능
+      trim: true,
     },
 
     // ✅ 사용자 정보
@@ -97,11 +98,6 @@ inquirySchema.pre("validate", function (next) {
     return next();
   }
 
-  // 🔹 상품 문의일 경우 productId 반드시 유효해야 함
-  if (this.productId && !mongoose.Types.ObjectId.isValid(this.productId)) {
-    return next(new Error("잘못된 상품 ID 형식입니다."));
-  }
-
   next();
 });
 
@@ -127,12 +123,12 @@ inquirySchema.pre("save", function (next) {
 -------------------------------------------------------- */
 inquirySchema.statics.findByProduct = async function (productId) {
   try {
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
+    // 🔸 이제 문자열 기반으로 검색
+    if (typeof productId !== "string") {
       console.warn("⚠️ 잘못된 productId 요청:", productId);
       return [];
     }
 
-    // 🔹 공지글은 제외하고 실제 상품 문의만 반환
     const inquiries = await this.find({
       productId,
       isNotice: { $ne: true },
@@ -146,6 +142,7 @@ inquirySchema.statics.findByProduct = async function (productId) {
     return [];
   }
 };
+
 /* --------------------------------------------------------
  ✅ (4) 인스턴스 메서드: 관리자 답변 추가
 -------------------------------------------------------- */
