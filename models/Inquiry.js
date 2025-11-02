@@ -86,15 +86,21 @@ inquirySchema.index({ isNotice: 1 }); // 공지글 빠른 조회용
  ✅ (1) 공지글 / 일반 문의 유효성 검사
 -------------------------------------------------------- */
 inquirySchema.pre("validate", function (next) {
-  // 🔹 공지글일 경우 productId 완전히 제거
+  // 🔹 공지글일 경우 productId 처리 수정
   if (this.isNotice) {
+    // 🔸 상품 공지("product-page")는 유지
+    if (this.productId === "product-page") {
+      return next();
+    }
+
+    // 🔸 일반 공지는 productId 제거
     this.productId = undefined;
     return next();
   }
 
   /* 🔹 사용자 문의(고객센터 탭)일 경우 productId 없이도 허용 */
   if (!this.isNotice && !this.productId) {
-    this.productId = undefined; // 명시적으로 제거
+    this.productId = undefined;
     return next();
   }
 
@@ -110,13 +116,14 @@ inquirySchema.pre("save", function (next) {
   if (this.answer) this.answer = this.answer.trim();
   if (this.reply) this.reply = this.reply.trim();
 
-  // 🔹 공지글은 productId 절대 저장되지 않도록 강제 제거
-  if (this.isNotice) {
+  // 🔹 공지글 처리 수정 (상품 공지는 유지)
+  if (this.isNotice && this.productId !== "product-page") {
     this.productId = undefined;
   }
 
   next();
 });
+
 
 /* --------------------------------------------------------
  ✅ (3) 정적 메서드: 상품별 문의 목록 불러오기
@@ -167,3 +174,4 @@ inquirySchema.set("toJSON", { virtuals: true });
 inquirySchema.set("toObject", { virtuals: true });
 
 export default mongoose.model("Inquiry", inquirySchema);
+  
