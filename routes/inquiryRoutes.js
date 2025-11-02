@@ -14,6 +14,8 @@ const router = express.Router();
 -------------------------------------------------------- */
 router.get("/", async (req, res) => {
   try {
+    console.log("📥 [GET /api/inquiries] 전체 문의 조회 요청 수신됨");
+
     const inquiries = await Inquiry.find({
       $or: [
         // ✅ 일반 공지 (isNotice:true, productId 없음)
@@ -23,6 +25,7 @@ router.get("/", async (req, res) => {
       ],
     }).sort({ isNotice: -1, createdAt: -1 });
 
+    console.log(`📦 [결과] 사용자 문의 + 공지 ${inquiries.length}건`);
     res.json(inquiries);
   } catch (err) {
     console.error("❌ 전체 문의 조회 실패:", err);
@@ -36,7 +39,9 @@ router.get("/", async (req, res) => {
 -------------------------------------------------------- */
 router.get("/all", async (req, res) => {
   try {
+    console.log("📥 [GET /api/inquiries/all] 전체 문의(All) 조회 요청 수신됨");
     const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
+    console.log(`📦 [결과] 전체 문의/공지 ${inquiries.length}건`);
     res.json(inquiries);
   } catch (err) {
     console.error("❌ 전체(all) 조회 실패:", err);
@@ -49,9 +54,11 @@ router.get("/all", async (req, res) => {
 -------------------------------------------------------- */
 router.get("/:productId", async (req, res, next) => {
   const { productId } = req.params;
+  console.log(`📥 [GET /api/inquiries/${productId}] 상품 문의 조회 요청`);
 
   // ✅ "notice"나 "all" 키워드는 상위 라우트로 넘김
   if (productId === "notice" || productId === "all") {
+    console.log("➡️ 예약어(next) 라우트 이동:", productId);
     return next();
   }
 
@@ -65,11 +72,13 @@ router.get("/:productId", async (req, res, next) => {
         ],
       }).sort({ isNotice: -1, createdAt: -1 });
 
+      console.log(`📦 [결과] 상품 문의 + 공지 ${inquiries.length}건`);
       return res.json(inquiries);
     }
 
     // ✅ 특정 상품별 문의 (ObjectId 검증)
     if (!mongoose.Types.ObjectId.isValid(productId)) {
+      console.warn("⚠️ 잘못된 상품 ID:", productId);
       return res.status(400).json({ message: "잘못된 상품 ID 형식입니다." });
     }
 
@@ -78,6 +87,7 @@ router.get("/:productId", async (req, res, next) => {
       isNotice: { $ne: true },
     }).sort({ createdAt: -1 });
 
+    console.log(`📦 [결과] 상품별 문의 ${inquiries.length}건`);
     res.json(inquiries);
   } catch (err) {
     console.error("❌ 상품 문의 조회 실패:", err);
@@ -87,18 +97,31 @@ router.get("/:productId", async (req, res, next) => {
 
 /* --------------------------------------------------------
  ✅ (4) 문의 등록 (로그인 필수 + 이메일 자동입력)
+   → productId 정확히 전달되는지 로그로 검증
 -------------------------------------------------------- */
 router.post("/", protect, async (req, res) => {
   try {
+    console.log("📩 [POST /api/inquiries] 문의 등록 요청 수신:", req.body);
+
     const user = req.user;
     const { question, answer, isPrivate, productId } = req.body;
+
+    console.log("📦 요청 값:", {
+      question,
+      answer,
+      isPrivate,
+      productId,
+      userEmail: user?.email,
+    });
 
     if (!question || !answer) {
       return res.status(400).json({ message: "제목과 내용을 모두 입력해주세요." });
     }
 
-    // ✅ 로그인된 유저의 이메일 자동 입력
     const email = user?.email || "";
+
+    // ✅ productId가 정확히 넘어오는지 로그 확인
+    console.log("🔍 전달된 productId =", productId);
 
     const newInquiry = new Inquiry({
       userName: email || "익명",
@@ -106,16 +129,17 @@ router.post("/", protect, async (req, res) => {
       answer,
       isPrivate: isPrivate || false,
       isNotice: false,
-      // ✅ 상품문의면 productId 저장, 아니면 undefined
-      productId: productId === "product-page" ? "product-page" : undefined,
+      // ✅ productId를 그대로 저장하되, 문자열일 경우 공백 제거
+      productId: typeof productId === "string" && productId.trim() !== "" ? productId.trim() : undefined,
       email,
     });
 
     await newInquiry.save();
 
     console.log("✅ 문의 등록 완료:", {
-      question,
-      email,
+      _id: newInquiry._id,
+      question: newInquiry.question,
+      email: newInquiry.email,
       productId: newInquiry.productId || "(일반 문의)",
     });
 
@@ -132,9 +156,12 @@ router.post("/", protect, async (req, res) => {
 -------------------------------------------------------- */
 router.post("/notice", protect, adminOnly, async (req, res) => {
   try {
+    console.log("📢 [POST /api/inquiries/notice] 공지 등록 요청 수신:", req.body);
+
     const { question, answer, productId } = req.body;
 
     if (!question || !answer) {
+      console.warn("⚠️ 공지 등록 실패 - 제목 또는 내용 누락");
       return res.status(400).json({ message: "공지 제목과 내용을 모두 입력해주세요." });
     }
 
@@ -150,7 +177,7 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
     await newNotice.save();
 
     console.log("✅ 공지 등록 완료:", {
-      question,
+      question: newNotice.question,
       productId: newNotice.productId || "(일반 공지)",
     });
 
@@ -173,9 +200,11 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
 router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
     const { reply } = req.body;
-    const inquiry = await Inquiry.findById(req.params.id);
+    console.log(`📝 [POST /api/inquiries/${req.params.id}/reply] 답변 등록 요청`);
 
+    const inquiry = await Inquiry.findById(req.params.id);
     if (!inquiry) {
+      console.warn("⚠️ 존재하지 않는 문의글 ID:", req.params.id);
       return res.status(404).json({ message: "문의글을 찾을 수 없습니다." });
     }
 
@@ -183,7 +212,11 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
     inquiry.repliedAt = new Date();
     await inquiry.save();
 
-    console.log(`📨 답변 등록 완료 (${inquiry._id})`);
+    console.log("✅ 답변 저장 완료:", {
+      id: inquiry._id,
+      question: inquiry.question,
+      email: inquiry.email,
+    });
 
     // ✅ 답변 이메일 발송
     if (inquiry.email) {
@@ -208,10 +241,7 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
       }
     }
 
-    res.status(200).json({
-      message: "답변이 저장되었습니다.",
-      inquiry,
-    });
+    res.status(200).json({ message: "답변이 저장되었습니다.", inquiry });
   } catch (err) {
     console.error("❌ 답변 등록 실패:", err);
     res.status(500).json({ message: err.message });
@@ -223,8 +253,11 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
 -------------------------------------------------------- */
 router.delete("/:id", protect, async (req, res) => {
   try {
+    console.log(`🗑️ [DELETE /api/inquiries/${req.params.id}] 문의 삭제 요청`);
+
     const inquiry = await Inquiry.findById(req.params.id);
     if (!inquiry) {
+      console.warn("⚠️ 삭제 실패 - 문의 없음:", req.params.id);
       return res.status(404).json({ message: "문의글을 찾을 수 없습니다." });
     }
 
@@ -232,12 +265,13 @@ router.delete("/:id", protect, async (req, res) => {
 
     // ✅ 관리자 또는 본인 확인
     if (!user.isAdmin && inquiry.email !== user.email) {
+      console.warn("⛔ 삭제 권한 없음:", user.email);
       return res.status(403).json({ message: "삭제 권한이 없습니다." });
     }
 
     await inquiry.deleteOne();
 
-    console.log(`🗑️ 문의(${inquiry._id}) 삭제 완료 - ${inquiry.question}`);
+    console.log(`✅ 문의(${inquiry._id}) 삭제 완료 - ${inquiry.question}`);
     res.json({ message: "문의가 삭제되었습니다." });
   } catch (err) {
     console.error("❌ 문의 삭제 실패:", err);
