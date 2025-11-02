@@ -37,6 +37,7 @@ console.log("☁️ Cloudinary 설정 완료");
 app.set("trust proxy", 1);
 
 /* -------------------- ✅ CORS 설정 -------------------- */
+// ✅ 완전한 허용 도메인 설정
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : [
@@ -46,6 +47,30 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       "https://onyou.store",
     ];
 
+// ✅ preflight + 실제 요청 모두 대응
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,DELETE,OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  // ✅ OPTIONS 사전 요청은 즉시 응답
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// ✅ cors 미들웨어 백업용 (일반 요청)
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -57,13 +82,8 @@ app.use(
       }
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-// ✅ preflight 요청 허용
-app.options("*", cors());
 
 /* -------------------- ✅ 요청 로그 -------------------- */
 if (process.env.NODE_ENV !== "production") {
@@ -85,6 +105,7 @@ app.use(
     tempFileDir: "/tmp/",
   })
 );
+
 /* -------------------- ✅ MongoDB 연결 -------------------- */
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -119,7 +140,6 @@ app.get("/", (req, res) => {
     },
   });
 });
-
 /* -------------------- ✅ 업로드 라우트: Cloudinary (보강) -------------------- */
 app.post("/api/upload", async (req, res) => {
   try {
@@ -170,6 +190,7 @@ app.use("/auth", (req, res) => {
     correctEndpoint: "/api/auth/login",
   });
 });
+
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
 app.use((err, req, res, next) => {
   console.error("🔥 서버 에러 발생:", err.stack || err.message);
@@ -221,13 +242,13 @@ app.use((err, req, res, next) => {
       process.env.NODE_ENV === "production" ? undefined : err.message,
   });
 });
-
 /* -------------------- ✅ 서버 실행 -------------------- */
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
   console.log(`🌐 CORS 허용 도메인 목록:`);
+
   allowedOrigins.forEach((o) => console.log("  •", o));
 
   // ✅ Cloudinary 설정 로그
@@ -241,4 +262,42 @@ app.listen(PORT, "0.0.0.0", () => {
   } else {
     console.warn("⚠️ Cloudinary 환경 변수가 누락되었습니다.");
   }
+
+  // ✅ MongoDB 연결 여부 체크
+  if (!mongoose.connection.readyState) {
+    console.warn("⚠️ MongoDB 연결이 아직 완료되지 않았습니다.");
+  } else {
+    console.log("✅ MongoDB 연결 확인 완료");
+  }
+
+  // ✅ 서버 시작 후 CORS 테스트용
+  console.log(
+    "🧩 CORS 테스트 → OPTIONS /api/inquiries (Preflight 요청)이 204로 응답되어야 정상 작동합니다."
+  );
+});
+
+/* -------------------- ✅ 프로세스 예외 처리 -------------------- */
+process.on("uncaughtException", (err) => {
+  console.error("🚨 예기치 못한 예외 발생:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("⚠️ 처리되지 않은 Promise 거부:", reason);
+});
+
+/* -------------------- ✅ graceful 종료 -------------------- */
+process.on("SIGTERM", () => {
+  console.log("🛑 서버 종료 신호 감지 (SIGTERM)");
+  mongoose.connection.close(() => {
+    console.log("🔌 MongoDB 연결 종료");
+    process.exit(0);
+  });
+});
+
+process.on("SIGINT", () => {
+  console.log("🛑 Ctrl + C 감지 → 서버 종료 중...");
+  mongoose.connection.close(() => {
+    console.log("🔌 MongoDB 연결 종료");
+    process.exit(0);
+  });
 });

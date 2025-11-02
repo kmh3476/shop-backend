@@ -10,30 +10,42 @@ const router = express.Router();
 
 /* --------------------------------------------------------
  ✅ (1) 전체 문의 + 공지글 조회 (고객센터용)
+   → 일반 문의 및 일반 공지만 (productId 없는 데이터)
 -------------------------------------------------------- */
 router.get("/", async (req, res) => {
   try {
-    const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
+    const inquiries = await Inquiry.find({
+      $or: [
+        // ✅ 일반 공지 (isNotice:true, productId 없음)
+        { isNotice: true, $or: [{ productId: { $exists: false } }, { productId: null }] },
+        // ✅ 일반 문의 (isNotice:false, productId 없음)
+        { isNotice: { $ne: true }, $or: [{ productId: { $exists: false } }, { productId: null }] },
+      ],
+    }).sort({ isNotice: -1, createdAt: -1 });
+
     res.json(inquiries);
   } catch (err) {
+    console.error("❌ 전체 문의 조회 실패:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
 /* --------------------------------------------------------
  ✅ (2) 모든 문의글 + 공지글 조회 (/all 별칭)
+   → 관리자용: 전체 데이터를 productId와 관계없이 반환
 -------------------------------------------------------- */
 router.get("/all", async (req, res) => {
   try {
     const inquiries = await Inquiry.find().sort({ isNotice: -1, createdAt: -1 });
     res.json(inquiries);
   } catch (err) {
+    console.error("❌ 전체(all) 조회 실패:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
 /* --------------------------------------------------------
- ✅ (3) 특정 상품 문의 목록 (공지글 제외)
+ ✅ (3) 특정 상품 문의 목록 (상품공지 포함)
 -------------------------------------------------------- */
 router.get("/:productId", async (req, res, next) => {
   const { productId } = req.params;
@@ -44,12 +56,23 @@ router.get("/:productId", async (req, res, next) => {
   }
 
   try {
-    // ✅ productId 유효성 검사
+    // ✅ 상품 문의 페이지 (특수 구분자)
+    if (productId === "product-page") {
+      const inquiries = await Inquiry.find({
+        $or: [
+          { isNotice: true, productId: "product-page" }, // 상품 공지
+          { isNotice: { $ne: true }, productId: "product-page" }, // 상품 문의
+        ],
+      }).sort({ isNotice: -1, createdAt: -1 });
+
+      return res.json(inquiries);
+    }
+
+    // ✅ 특정 상품별 문의 (ObjectId 검증)
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(400).json({ message: "잘못된 상품 ID 형식입니다." });
     }
 
-    // ✅ 해당 상품의 문의만 조회 (공지글 제외)
     const inquiries = await Inquiry.find({
       productId,
       isNotice: { $ne: true },
@@ -57,13 +80,14 @@ router.get("/:productId", async (req, res, next) => {
 
     res.json(inquiries);
   } catch (err) {
-    console.error("❌ 상품 문의 불러오기 실패:", err);
+    console.error("❌ 상품 문의 조회 실패:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
 /* --------------------------------------------------------
  ✅ (4) 문의 등록 (로그인 필수 + 이메일 자동입력)
+   → productId가 "product-page"면 상품문의로 저장
 -------------------------------------------------------- */
 router.post("/", protect, async (req, res) => {
   try {
@@ -74,31 +98,30 @@ router.post("/", protect, async (req, res) => {
       return res.status(400).json({ message: "제목과 내용을 모두 입력해주세요." });
     }
 
-    // ✅ 로그인된 유저의 이메일 자동 입력
-    const email = user?.email || "";
+    const email = user?.email || "익명";
 
     const newInquiry = new Inquiry({
-      userName: email || "익명",
+      userName: email,
       question,
       answer,
       isPrivate: isPrivate || false,
       isNotice: false,
-      productId: productId || undefined,
+      productId: productId === "product-page" ? "product-page" : undefined,
       email,
     });
 
     await newInquiry.save();
 
-    // ✅ 문의 등록 후 이메일 발송 (선택적)
-    if (email) {
+    // ✅ 이메일 발송 (선택적)
+    if (email && email !== "익명") {
       try {
         await resend.emails.send({
           from: "support@onyou.store",
           to: email,
-          subject: "[OnYou] 문의가 접수되었습니다.",
+          subject: "[OnYou] 문의가 정상적으로 접수되었습니다.",
           html: `
             <div style="font-family:sans-serif;line-height:1.6;color:#333">
-              <h2 style="color:#111">문의가 정상적으로 접수되었습니다.</h2>
+              <h2 style="color:#111">문의가 접수되었습니다.</h2>
               <p>고객님의 문의가 아래와 같이 등록되었습니다.</p>
               <hr style="border:none;border-top:1px solid #ddd;margin:10px 0"/>
               <p><strong>제목:</strong> ${question}</p>
@@ -121,9 +144,12 @@ router.post("/", protect, async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
-// 📁 inquiryRoutes.js
 
-// ✅ (5) 공지글 등록 (관리자 전용)
+/* --------------------------------------------------------
+ ✅ (5) 공지글 등록 (관리자 전용)
+   → productId === 'product-page' → 상품공지
+     나머지 → 사용자 문의용 공지
+-------------------------------------------------------- */
 router.post("/notice", protect, adminOnly, async (req, res) => {
   try {
     const { question, answer, productId } = req.body;
@@ -132,14 +158,13 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
       return res.status(400).json({ message: "공지 제목과 내용을 모두 입력해주세요." });
     }
 
-    // ✅ productId가 정확히 "product-page"면 그대로, 없으면 undefined로 저장
     const newNotice = new Inquiry({
       userName: "관리자",
       question,
       answer,
       isNotice: true,
       isPrivate: false,
-      productId: productId || undefined,
+      productId: productId === "product-page" ? "product-page" : undefined,
     });
 
     await newNotice.save();
@@ -147,8 +172,8 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
     res.status(201).json({
       message:
         productId === "product-page"
-          ? "상품문의 공지가 등록되었습니다."
-          : "일반 공지가 등록되었습니다.",
+          ? "✅ 상품 문의 공지가 등록되었습니다."
+          : "✅ 일반 공지가 등록되었습니다.",
       notice: newNotice,
     });
   } catch (err) {
@@ -156,12 +181,8 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
-
-
-
-
 /* --------------------------------------------------------
- ✅ (6) 관리자 답변 등록/수정
+ ✅ (6) 관리자 답변 등록 / 수정
 -------------------------------------------------------- */
 router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
@@ -200,7 +221,10 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
       }
     }
 
-    res.status(200).json({ message: "답변이 저장되었습니다.", inquiry });
+    res.status(200).json({
+      message: "답변이 저장되었습니다.",
+      inquiry,
+    });
   } catch (err) {
     console.error("❌ 답변 등록 실패:", err);
     res.status(500).json({ message: err.message });
@@ -219,18 +243,14 @@ router.delete("/:id", protect, async (req, res) => {
 
     const user = req.user;
 
-    // ✅ 본인 확인 또는 관리자 권한 확인
-    if (
-      !user.isAdmin &&
-      (!inquiry.email || inquiry.email !== user.email)
-    ) {
-      return res
-        .status(403)
-        .json({ message: "삭제 권한이 없습니다." });
+    // ✅ 관리자 또는 본인 확인
+    if (!user.isAdmin && inquiry.email !== user.email) {
+      return res.status(403).json({ message: "삭제 권한이 없습니다." });
     }
 
     await inquiry.deleteOne();
 
+    console.log(`🗑️ 문의(${inquiry._id}) 삭제 완료 - ${inquiry.question}`);
     res.json({ message: "문의가 삭제되었습니다." });
   } catch (err) {
     console.error("❌ 문의 삭제 실패:", err);
@@ -238,4 +258,7 @@ router.delete("/:id", protect, async (req, res) => {
   }
 });
 
+/* --------------------------------------------------------
+ ✅ 라우터 내보내기
+-------------------------------------------------------- */
 export default router;
