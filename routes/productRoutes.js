@@ -135,6 +135,10 @@ router.put("/:id", async (req, res) => {
     if (price) product.price = price;
     if (description) product.description = description;
     if (imageUrl) product.image = imageUrl;
+    
+    if (req.body.detailText !== undefined) product.detailText = req.body.detailText;
+if (req.body.sizeText !== undefined) product.sizeText = req.body.sizeText;
+
 
     if (Array.isArray(images)) {
       const cleanImages = images.filter(Boolean);

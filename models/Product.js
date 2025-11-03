@@ -7,6 +7,11 @@ const ProductSchema = new mongoose.Schema(
     name: { type: String, required: true },
     price: { type: Number, required: true },
     description: { type: String },
+    
+    // ✅ 상품 상세 설명 및 추가 정보
+detailText: { type: String, default: "" }, // 상품 상세 설명
+sizeText: { type: String, default: "" },   // 사이즈 및 구매 안내
+
 
     // ✅ 여러 장 이미지 지원 (배열)
     images: {
