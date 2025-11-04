@@ -141,12 +141,22 @@ if (req.body.sizeText !== undefined) product.sizeText = req.body.sizeText;
 
 
     if (Array.isArray(images)) {
-      const cleanImages = images.filter(Boolean);
-      product.images =
-        cleanImages.length > 0
-          ? cleanImages
-          : [product.image || "https://placehold.co/250x200?text=No+Image"];
-    }
+  // ✅ blob: 제거
+  const cleanImages = images
+    .filter(Boolean)
+    .filter((img) => img.startsWith("http"));
+
+  product.images =
+    cleanImages.length > 0
+      ? cleanImages
+      : [product.image || "https://placehold.co/250x200?text=No+Image"];
+}
+
+// ✅ 이미지 배열이 비어있고 mainImage만 있으면 보정
+if ((!product.images || product.images.length === 0) && product.mainImage) {
+  product.images = [product.mainImage];
+}
+
 
     if (mainImage && product.images.includes(mainImage)) {
       product.mainImage = mainImage;
