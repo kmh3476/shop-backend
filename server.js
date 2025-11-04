@@ -140,6 +140,7 @@ app.get("/", (req, res) => {
     },
   });
 });
+
 /* -------------------- ✅ 업로드 라우트: Cloudinary (보강) -------------------- */
 app.post("/api/upload", async (req, res) => {
   try {
@@ -166,7 +167,6 @@ app.post("/api/upload", async (req, res) => {
     });
   }
 });
-
 /* -------------------- ✅ 실제 API 라우트 -------------------- */
 app.use("/api/products", productRoutes);
 app.use("/api/reviews", reviewRoutes);
@@ -242,6 +242,7 @@ app.use((err, req, res, next) => {
       process.env.NODE_ENV === "production" ? undefined : err.message,
   });
 });
+
 /* -------------------- ✅ 서버 실행 -------------------- */
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => {
