@@ -155,21 +155,20 @@ if (req.body.sizeText !== undefined) product.sizeText = req.body.sizeText;
     }
 
     if (categoryPage !== undefined) {
-      product.categoryPage = categoryPage
-        ? new mongoose.Types.ObjectId(categoryPage)
-        : null;
+  if (categoryPage && mongoose.isValidObjectId(categoryPage)) {
+    product.categoryPage = new mongoose.Types.ObjectId(categoryPage);
 
-      // ✅ categoryName도 자동 갱신
-      if (categoryPage) {
-        const PageSetting = mongoose.model("PageSetting");
-        const page = await PageSetting.findById(categoryPage).lean();
-        if (page && page.name) {
-          product.categoryName = page.name;
-        }
-      } else {
-        product.categoryName = "default";
-      }
-    }
+    // ✅ categoryName 자동 갱신
+    const PageSetting = mongoose.model("PageSetting");
+    const page = await PageSetting.findById(categoryPage).lean();
+    product.categoryName = page?.name || "default";
+  } else {
+    // 잘못된 ID 또는 빈 문자열일 경우
+    product.categoryPage = null;
+    product.categoryName = "default";
+  }
+}
+
 
     const updated = await product.save();
     const populated = await Product.findById(updated._id).populate("categoryPage");
