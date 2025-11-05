@@ -39,7 +39,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-   ✅ 상품 상세 조회
+   ✅ 상품 상세 조회 (대표 이미지 우선 정렬)
 ========================================================== */
 router.get("/:id", async (req, res) => {
   try {
@@ -47,12 +47,23 @@ router.get("/:id", async (req, res) => {
     if (!product) {
       return res.status(404).json({ error: "상품을 찾을 수 없습니다." });
     }
+
+    // ✅ 대표 이미지(mainImage)를 항상 첫 번째로 정렬
+    if (product.mainImage && product.images?.length) {
+      const reordered = [
+        product.mainImage,
+        ...product.images.filter((img) => img !== product.mainImage),
+      ];
+      product.images = reordered;
+    }
+
     res.json(product);
   } catch (err) {
     console.error("❌ 상품 상세 조회 실패:", err);
     res.status(500).json({ error: "상품 상세 조회 실패" });
   }
 });
+
 
 /* ==========================================================
    ✅ 상품 추가 (여러 장 + 대표 이미지 + 탭 연결)
