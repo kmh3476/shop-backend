@@ -1,4 +1,25 @@
 // 📁 routes/productRoutes.js
+// 📦 Cloudinary 이미지 업로드 관련 설정 추가
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "shop-products",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+  },
+});
+
+const upload = multer({ storage });
+
 import express from "express";
 import mongoose from "mongoose";
 import Product from "../models/Product.js";
@@ -197,6 +218,20 @@ if ((!product.images || product.images.length === 0) && product.mainImage) {
   } catch (err) {
     console.error("❌ 상품 수정 실패:", err);
     res.status(500).json({ error: "상품 수정 실패" });
+  }
+});
+
+/* ==========================================================
+   ✅ Cloudinary 이미지 업로드 (단일 또는 여러 장)
+   /api/products/upload
+========================================================== */
+router.post("/upload", upload.array("images", 10), async (req, res) => {
+  try {
+    const imageUrls = req.files.map((file) => file.path);
+    res.json({ urls: imageUrls });
+  } catch (err) {
+    console.error("❌ 이미지 업로드 실패:", err);
+    res.status(500).json({ error: "이미지 업로드 실패" });
   }
 });
 
