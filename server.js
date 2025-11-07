@@ -19,6 +19,7 @@ import adminRoutes from "./routes/admin.js";
 import verifyRoutes from "./routes/verify.js";
 import supportRoutes from "./routes/support.js";
 import pageSettingRoutes from "./routes/pageSettingRoutes.js";
+import languageRoutes from "./routes/languageRoutes.js";
 
 import { protect, adminOnly } from "./middleware/authMiddleware.js";
 
@@ -176,6 +177,9 @@ app.use("/api/verify", verifyRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 app.use("/api/pages", pageSettingRoutes);
+
+// ✅ 다국어 관리 라우트 추가
+app.use("/api/language", languageRoutes);
 
 /* -------------------- ✅ 호환용 구버전 라우트 -------------------- */
 app.use("/pages", pageSettingRoutes);
