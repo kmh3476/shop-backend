@@ -46,6 +46,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       "https://project-onyou.vercel.app",
       "https://shop-backend-1-dfsl.onrender.com",
       "https://onyou.store",
+      "shop-frontend-cz3y-git-main-kmh3476s-projects.vercel.app",
+      "shop-frontend-cz3y-b2vvl9bb3-kmh3476s-projects.vercel.app"
     ];
 
 // ✅ preflight + 실제 요청 모두 대응
