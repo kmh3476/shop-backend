@@ -37,56 +37,40 @@ console.log("☁️ Cloudinary 설정 완료");
 /* -------------------- ✅ 프록시 환경 설정 -------------------- */
 app.set("trust proxy", 1);
 
-/* -------------------- ✅ CORS 설정 -------------------- */
-// ✅ 완전한 허용 도메인 설정
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : [
-      "http://localhost:5173",
-      "https://project-onyou.vercel.app",
-      "https://shop-backend-1-dfsl.onrender.com",
-      "https://onyou.store",
-      "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app",
-      "https://shop-frontend-cz3y-b2vvl9bb3-kmh3476s-projects.vercel.app"
-    ];
+/* -------------------- ✅ CORS 설정 (Render 호환 완성본) -------------------- */
+import cors from "cors";
 
-// ✅ preflight + 실제 요청 모두 대응
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,DELETE,OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+const allowedOrigins = [
+  "http://localhost:5173", // ✅ 로컬 개발용
+  "https://onyou.store", // ✅ 실제 도메인
+  "https://project-onyou.vercel.app", // ✅ 구 배포 주소
+  "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app", // ✅ 현재 Vercel Production
+  "https://shop-frontend-cz3y-b2vvl9bb3-kmh3476s-projects.vercel.app", // ✅ Preview 배포
+  "https://shop-backend-1-dfsl.onrender.com" // ✅ 백엔드 자체 주소 (API 테스트용)
+];
 
-  // ✅ OPTIONS 사전 요청은 즉시 응답
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
-// ✅ cors 미들웨어 백업용 (일반 요청)
+// ✅ CORS 미들웨어 (중복 제거, 완전 통합)
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+    origin: (origin, callback) => {
+      // ✅ origin이 없을 수도 있음 (예: Postman, 서버 내부 요청)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true); // 허용
       } else {
         console.log("🚫 차단된 CORS 요청:", origin);
         callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
       }
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// ✅ OPTIONS(Preflight) 요청 자동 응답
+app.options("*", cors());
 
 /* -------------------- ✅ 요청 로그 -------------------- */
 if (process.env.NODE_ENV !== "production") {
