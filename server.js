@@ -38,8 +38,6 @@ console.log("☁️ Cloudinary 설정 완료");
 app.set("trust proxy", 1);
 
 /* -------------------- ✅ CORS 설정 (Render 호환 완성본) -------------------- */
-import cors from "cors";
-
 const allowedOrigins = [
   "http://localhost:5173", // ✅ 로컬 개발용
   "https://onyou.store", // ✅ 실제 도메인
