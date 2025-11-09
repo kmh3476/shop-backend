@@ -7,11 +7,10 @@ const ProductSchema = new mongoose.Schema(
     name: { type: String, required: true },
     price: { type: Number, required: true },
     description: { type: String },
-    
-    // ✅ 상품 상세 설명 및 추가 정보
-detailText: { type: String, default: "" }, // 상품 상세 설명
-sizeText: { type: String, default: "" },   // 사이즈 및 구매 안내
 
+    // ✅ 상품 상세 설명 및 추가 정보
+    detailText: { type: String, default: "" }, // 상품 상세 설명
+    sizeText: { type: String, default: "" },   // 사이즈 및 구매 안내
 
     // ✅ 여러 장 이미지 지원 (배열)
     images: {
@@ -46,6 +45,15 @@ sizeText: { type: String, default: "" },   // 사이즈 및 구매 안내
       index: true, // 🔍 빠른 검색용 인덱스 추가
     },
 
+    // ✅ i18n 다국어 대응용 고정 카테고리 key 추가
+    //    "featured", "top", "bottom", "coordi" 중 하나
+    categoryKey: {
+      type: String,
+      enum: ["featured", "top", "bottom", "coordi", "default"],
+      default: "default",
+      index: true,
+    },
+
     // ✅ 추가 확장 필드 (예: 추천상품 여부, 품절 여부 등)
     isRecommended: {
       type: Boolean,
@@ -59,7 +67,6 @@ sizeText: { type: String, default: "" },   // 사이즈 및 구매 안내
 );
 
 // ✅ populate용 가상 필드 (선택사항)
-//    populate 시 PageSetting의 label만 가져올 수 있도록
 ProductSchema.virtual("pageLabel", {
   ref: "PageSetting",
   localField: "categoryPage",
@@ -67,24 +74,42 @@ ProductSchema.virtual("pageLabel", {
   justOne: true,
 });
 
-// ✅ pre-save 훅: categoryPage 연결 시 자동으로 categoryName도 동기화
+// ✅ pre-save 훅: categoryPage 연결 시 자동으로 categoryName 동기화 + categoryKey 기본값 유지
 ProductSchema.pre("save", async function (next) {
   try {
     if (this.categoryPage) {
       const PageSetting = mongoose.model("PageSetting");
       const page = await PageSetting.findById(this.categoryPage).lean();
       if (page && page.name) {
-        this.categoryName = page.name; // 🔁 자동 동기화
+        this.categoryName = page.name;
       }
+      // 🔹 categoryKey가 아직 없으면 자동 매핑 시도
+     if (!this.categoryKey || this.categoryKey === "default") {
+  const map = {
+    "추천상품": "featured",
+    "상의": "top",
+    "하의": "bottom",
+    "코디 추천": "coordi",
+  };
+
+  // 1️⃣ categoryName이 매핑 목록에 있으면 그대로 설정
+  if (map[this.categoryName]) {
+    this.categoryKey = map[this.categoryName];
+  }
+  // 2️⃣ categoryName이 없어도 추천상품이면 featured
+  else if (this.isRecommended) {
+    this.categoryKey = "featured";
+  }
+}
     }
     next();
   } catch (err) {
-    console.error("❌ categoryName 자동 동기화 실패:", err);
+    console.error("❌ categoryName/categoryKey 자동 동기화 실패:", err);
     next(err);
   }
 });
 
-// ✅ 모델 중복 등록 방지 (Render/Vercel 환경에서 중요)
+// ✅ 모델 중복 등록 방지
 const Product =
   mongoose.models.Product || mongoose.model("Product", ProductSchema);
 
