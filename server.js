@@ -43,7 +43,7 @@ const allowedOrigins = [
   "https://onyou.store", // ✅ 실제 도메인
   "https://project-onyou.vercel.app", // ✅ 구 배포 주소
   "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app", // ✅ 현재 Vercel Production
-  "https://shop-frontend-cz3y-ld69akmvl-kmh3476s-projects.vercel.app", // ✅ Preview 배포
+  "https://shop-frontend-cz3y-dp4n5o4gp-kmh3476s-projects.vercel.app", // ✅ Preview 배포
   "https://shop-backend-1-dfsl.onrender.com" // ✅ 백엔드 자체 주소 (API 테스트용)
 ];
 
