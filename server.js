@@ -40,7 +40,8 @@ app.set("trust proxy", 1);
 /* -------------------- ✅ CORS 설정 (Render 호환 완성본) -------------------- */
 const allowedOrigins = [
   "http://localhost:5173", // ✅ 로컬 개발용
-  "https://onyou.store", // ✅ 실제 도메인
+  "https://onyou.store",
+  "https://www.onyou.store", // ✅ 실제 도메인
   "https://project-onyou.vercel.app", // ✅ 구 배포 주소
   "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app", // ✅ 현재 Vercel Production
   "https://shop-frontend-cz3y-kqw6tjp9j-kmh3476s-projects.vercel.app", // ✅ Preview 배포
