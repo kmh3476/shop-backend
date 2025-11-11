@@ -60,11 +60,16 @@ const MESSAGES = {
 
 // 언어 감지 함수
 function getLang(req) {
+  const customLang = req.headers["x-app-language"]; // ✅ 새 헤더
+  if (customLang) return ["ko", "en", "th"].includes(customLang) ? customLang : "th";
+
+  // fallback - 브라우저가 보내는 Accept-Language
   const acceptLang = req.headers["accept-language"];
-  if (!acceptLang) return "th"; // 기본은 태국어
+  if (!acceptLang) return "th";
   const lang = acceptLang.split(",")[0].split("-")[0];
   return ["ko", "en", "th"].includes(lang) ? lang : "th";
 }
+
 
 // t() 생성기
 function tFactory(lang) {
