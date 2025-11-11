@@ -74,7 +74,7 @@ function getLang(req) {
   const lang = acceptLang.split(",")[0].split("-")[0];
   return ["ko", "en", "th"].includes(lang) ? lang : "th";
 }
-
+  
 
 
 // t() 생성기
