@@ -100,6 +100,7 @@ if (process.env.NODE_ENV !== "production") {
     })
   );
 }
+
 /* -------------------- ✅ 요청 본문 파서 및 파일 업로드 허용 -------------------- */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -171,7 +172,6 @@ app.post("/api/upload", async (req, res) => {
     });
   }
 });
-
 /* -------------------- ✅ 실제 API 라우트 -------------------- */
 app.use("/api/products", productRoutes);
 app.use("/api/reviews", reviewRoutes);
@@ -196,6 +196,7 @@ app.use("/auth", (req, res) => {
     correctEndpoint: "/api/auth/login",
   });
 });
+
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
 app.use((err, req, res, next) => {
   console.error("🔥 서버 에러 발생:", err.stack || err.message);
@@ -212,7 +213,7 @@ app.use((err, req, res, next) => {
   // ✅ express-rate-limit 관련 에러 감지
   if (err.code === "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR") {
     console.error(
-      "⚠️ 프록시 설정이 없어서 express-rate-limit가 클라이언트 IP를 읽지 못했습니다."
+      "⚠️ 프록시 설정이 없어서 express-rate-limit가 클라이언트 IP를 읽지 못했습니다. app.set('trust proxy', 1)을 추가하세요."
     );
     return res.status(400).json({
       success: false,
@@ -307,3 +308,66 @@ process.on("SIGINT", () => {
     process.exit(0);
   });
 });
+/* -------------------- ✅ 예외 복구 및 헬스체크 엔드포인트 (추가 권장) -------------------- */
+// 서버 헬스체크용 (Render나 Vercel 환경에서 “cold start” 대비)
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    mongo: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 클라이언트에서 CORS 허용 상태 및 헤더 검증 테스트용
+app.get("/api/debug/headers", (req, res) => {
+  res.status(200).json({
+    message: "헤더 디버깅용 엔드포인트",
+    receivedHeaders: {
+      "x-app-language": req.headers["x-app-language"] || "(없음)",
+      "accept-language": req.headers["accept-language"] || "(없음)",
+      origin: req.headers["origin"] || "(없음)",
+    },
+  });
+});
+
+/* -------------------- ✅ 미등록 라우트 처리 -------------------- */
+app.use((req, res) => {
+  console.warn("⚠️ 존재하지 않는 라우트 접근:", req.originalUrl);
+  res.status(404).json({
+    success: false,
+    message: "요청한 API 엔드포인트가 존재하지 않습니다.",
+    path: req.originalUrl,
+  });
+});
+
+/* -------------------- ✅ Express 종료 핸들러 (보강) -------------------- */
+function gracefulShutdown(signal) {
+  console.log(`🧩 ${signal} 신호 감지 → 서버 안전 종료 중...`);
+  mongoose.connection.close(() => {
+    console.log("🔌 MongoDB 연결 종료 완료");
+    process.exit(0);
+  });
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+/* -------------------- ✅ 글로벌 예외 처리 (보강) -------------------- */
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("⚠️ 처리되지 않은 Promise 거부:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("🚨 예기치 못한 예외 발생:", err);
+});
+
+/* -------------------- ✅ 서버 완전 구동 로그 -------------------- */
+console.log(`
+=========================================
+🚀 Shop Backend Server 구동 완료!
+📦 NODE_ENV: ${process.env.NODE_ENV}
+🔗 MongoDB: ${mongoose.connection.readyState === 1 ? "✅ 연결됨" : "❌ 미연결"}
+🌐 허용된 도메인 수: ${allowedOrigins.length}
+=========================================
+`);
