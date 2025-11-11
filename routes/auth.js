@@ -60,15 +60,21 @@ const MESSAGES = {
 
 // 언어 감지 함수
 function getLang(req) {
-  const customLang = req.headers["x-app-language"]; // ✅ 새 헤더
-  if (customLang) return ["ko", "en", "th"].includes(customLang) ? customLang : "th";
+  // ✅ 커스텀 헤더가 우선
+  const appLang = req.headers["x-app-language"];
+  if (appLang) {
+    console.log("📩 X-App-Language 헤더:", appLang);
+    return ["ko", "en", "th"].includes(appLang) ? appLang : "th";
+  }
 
-  // fallback - 브라우저가 보내는 Accept-Language
+  // fallback: 브라우저 기본 언어
   const acceptLang = req.headers["accept-language"];
+  console.log("📩 Accept-Language 헤더:", acceptLang);
   if (!acceptLang) return "th";
   const lang = acceptLang.split(",")[0].split("-")[0];
   return ["ko", "en", "th"].includes(lang) ? lang : "th";
 }
+
 
 
 // t() 생성기
