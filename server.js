@@ -6,8 +6,8 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import morgan from "morgan";
-import fileUpload from "express-fileupload"; // ✅ Cloudinary 파일 업로드 지원용 추가
-import cloudinary from "cloudinary"; // ✅ Cloudinary 라이브러리 추가
+import fileUpload from "express-fileupload";
+import cloudinary from "cloudinary";
 
 // ✅ 라우트 불러오기
 import uploadRouter from "./routes/upload.js";
@@ -39,16 +39,15 @@ app.set("trust proxy", 1);
 
 /* -------------------- ✅ CORS 설정 (Render 호환 완성본) -------------------- */
 const allowedOrigins = [
-  "http://localhost:5173", // ✅ 로컬 개발용
+  "http://localhost:5173",
   "https://onyou.store",
-  "https://www.onyou.store", // ✅ 실제 도메인
-  "https://project-onyou.vercel.app", // ✅ 구 배포 주소
-  "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app", // ✅ 현재 Vercel Production
-  "https://shop-frontend-cz3y-cej5x6lt6-kmh3476s-projects.vercel.app", // ✅ Preview 배포
-  "https://shop-backend-1-dfsl.onrender.com" // ✅ 백엔드 자체 주소 (API 테스트용)
+  "https://www.onyou.store",
+  "https://project-onyou.vercel.app",
+  "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app",
+  "https://shop-frontend-cz3y-cej5x6lt6-kmh3476s-projects.vercel.app",
+  "https://shop-backend-1-dfsl.onrender.com",
 ];
 
-// ✅ CORS 미들웨어 (중복 제거, 완전 통합)
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -65,14 +64,31 @@ app.use(
     allowedHeaders: [
       "Content-Type",
       "Authorization",
-      "X-App-Language", // ✅ 반드시 추가!
+      "X-App-Language", // ✅ 이미 잘 추가됨
+      "Accept-Language", // ✅ 추가로 명시 (브라우저 기본 헤더도 안전하게 허용)
     ],
   })
 );
 
+// ✅ OPTIONS(Preflight) 요청 자동 응답 및 디버깅 로그
+app.options("*", (req, res) => {
+  console.log("🔎 Preflight 요청 감지:", req.headers["origin"]);
+  console.log("🔎 요청 허용 헤더:", req.headers["access-control-request-headers"]);
+  res.sendStatus(204);
+});
 
-// ✅ OPTIONS(Preflight) 요청 자동 응답
-app.options("*", cors());
+/* -------------------- ✅ 글로벌 언어 로그 미들웨어 (추가) -------------------- */
+app.use((req, res, next) => {
+  const langHeader = req.headers["x-app-language"];
+  const acceptLang = req.headers["accept-language"];
+  if (langHeader || acceptLang) {
+    console.log("🌐 수신된 언어 헤더 →", {
+      "X-App-Language": langHeader || "(없음)",
+      "Accept-Language": acceptLang || "(없음)",
+    });
+  }
+  next();
+});
 
 /* -------------------- ✅ 요청 로그 -------------------- */
 if (process.env.NODE_ENV !== "production") {
@@ -84,7 +100,6 @@ if (process.env.NODE_ENV !== "production") {
     })
   );
 }
-
 /* -------------------- ✅ 요청 본문 파서 및 파일 업로드 허용 -------------------- */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -139,7 +154,7 @@ app.post("/api/upload", async (req, res) => {
 
     const file = req.files.image.tempFilePath;
 
-    // ✅ 업로드 Preset 적용 (Unsigned preset: onyou_uploads)
+    // ✅ 업로드 Preset 적용
     const result = await cloudinary.v2.uploader.upload(file, {
       upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET || "onyou_uploads",
       folder: "products/",
@@ -156,6 +171,7 @@ app.post("/api/upload", async (req, res) => {
     });
   }
 });
+
 /* -------------------- ✅ 실제 API 라우트 -------------------- */
 app.use("/api/products", productRoutes);
 app.use("/api/reviews", reviewRoutes);
@@ -165,8 +181,6 @@ app.use("/api/verify", verifyRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/admin", protect, adminOnly, adminRoutes);
 app.use("/api/pages", pageSettingRoutes);
-
-// ✅ 다국어 관리 라우트 추가
 app.use("/api/language", languageRoutes);
 
 /* -------------------- ✅ 호환용 구버전 라우트 -------------------- */
@@ -182,7 +196,6 @@ app.use("/auth", (req, res) => {
     correctEndpoint: "/api/auth/login",
   });
 });
-
 /* -------------------- ✅ 에러 처리 미들웨어 -------------------- */
 app.use((err, req, res, next) => {
   console.error("🔥 서버 에러 발생:", err.stack || err.message);
@@ -199,7 +212,7 @@ app.use((err, req, res, next) => {
   // ✅ express-rate-limit 관련 에러 감지
   if (err.code === "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR") {
     console.error(
-      "⚠️ 프록시 설정이 없어서 express-rate-limit가 클라이언트 IP를 읽지 못했습니다. app.set('trust proxy', 1)을 추가하세요."
+      "⚠️ 프록시 설정이 없어서 express-rate-limit가 클라이언트 IP를 읽지 못했습니다."
     );
     return res.status(400).json({
       success: false,
