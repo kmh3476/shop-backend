@@ -9,6 +9,13 @@ const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 const emailVerificationCodes = new Map();
 
+// ✅ [디버그용] 클라이언트에서 전달된 언어 헤더 확인
+router.use((req, res, next) => {
+  console.log("📩 Accept-Language 헤더:", req.headers["accept-language"]);
+  next();
+});
+
+
 /* -------------------------------------------------
 🆕 i18n 보강 (추가만 함)
 -------------------------------------------------- */
