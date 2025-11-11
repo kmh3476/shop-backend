@@ -52,11 +52,9 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // ✅ origin이 없을 수도 있음 (예: Postman, 서버 내부 요청)
       if (!origin) return callback(null, true);
-
       if (allowedOrigins.includes(origin)) {
-        callback(null, true); // 허용
+        callback(null, true);
       } else {
         console.log("🚫 차단된 CORS 요청:", origin);
         callback(new Error("CORS 정책에 의해 차단된 요청입니다."));
@@ -64,9 +62,14 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-App-Language", // ✅ 반드시 추가!
+    ],
   })
 );
+
 
 // ✅ OPTIONS(Preflight) 요청 자동 응답
 app.options("*", cors());
