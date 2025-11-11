@@ -298,18 +298,14 @@ router.post("/login", async (req, res) => {
       $or: [{ email: loginInput }, { userId: loginInput }],
     }).select("+password");
 
+    // ✅ 존재하지 않는 계정
     if (!user)
       return res.status(400).json({
         message: "존재하지 않는 계정입니다.",
         i18n: { code: "login_failed", text: res.locals.t("login_failed") },
       });
 
-    if (!user.emailVerified)
-      return res.status(400).json({
-        message: "이메일 인증 후 로그인할 수 있습니다.",
-        i18n: { code: "login_failed", text: res.locals.t("login_failed") },
-      });
-
+    // ✅ 비밀번호 불일치
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
       return res.status(400).json({
@@ -317,6 +313,7 @@ router.post("/login", async (req, res) => {
         i18n: { code: "login_failed", text: res.locals.t("login_failed") },
       });
 
+    // ✅ 로그인 성공
     const token = jwt.sign(
       { id: user._id, email: user.email, isAdmin: user.isAdmin },
       process.env.JWT_SECRET,
@@ -350,6 +347,7 @@ router.post("/login", async (req, res) => {
     });
   }
 });
+
 /* -------------------- ✅ 🔄 Refresh Token 으로 Access Token 재발급 -------------------- */
 router.post("/refresh", async (req, res) => {
   const { token } = req.body;
