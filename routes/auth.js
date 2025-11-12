@@ -31,6 +31,8 @@ const MESSAGES = {
     refresh_failed: "토큰 갱신 실패",
     reset_sent: "비밀번호 재설정 링크를 이메일로 전송했습니다.",
     reset_failed: "비밀번호 재설정 중 오류가 발생했습니다.",
+    find_id_success: "아이디 찾기 성공",
+    find_id_failed: "등록된 이메일이 없습니다.",
   },
   en: {
     duplicate_check_error: "An error occurred while checking duplicates.",
@@ -43,6 +45,8 @@ const MESSAGES = {
     refresh_failed: "Token refresh failed.",
     reset_sent: "Password reset link sent to your email.",
     reset_failed: "An error occurred while resetting the password.",
+    find_id_success: "Find ID successful",
+    find_id_failed: "No account found with this email.",
   },
   th: {
     duplicate_check_error: "เกิดข้อผิดพลาดระหว่างการตรวจสอบข้อมูลซ้ำ",
@@ -55,6 +59,8 @@ const MESSAGES = {
     refresh_failed: "การต่ออายุโทเค็นล้มเหลว",
     reset_sent: "ส่งลิงก์รีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว",
     reset_failed: "เกิดข้อผิดพลาดระหว่างการรีเซ็ตรหัสผ่าน",
+    find_id_success: "ค้นหาไอดีสำเร็จ",
+    find_id_failed: "ไม่พบบัญชีที่มีอีเมลนี้",
   },
 };
 
@@ -429,6 +435,40 @@ router.post("/forgot", async (req, res) => {
       message: "서버 오류가 발생했습니다.",
       i18n: { code: "reset_failed", text: res.locals.t("reset_failed") },
     });
+  }
+});
+
+/* -------------------- ✅ 아이디 찾기 -------------------- */
+router.post("/find-id", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        message: "이메일을 입력해주세요.",
+        i18n: { code: "find_id_failed", text: res.locals.t("find_id_failed") }
+      });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+  return res.status(404).json({
+    message: "등록된 이메일이 없습니다.",
+    i18n: { code: "find_id_failed", text: res.locals.t("find_id_failed") }, // ✅ 수정
+  });
+}
+
+    res.json({
+      success: true,
+      message: "아이디 찾기 성공",
+      i18n: { code: "find_id_success", text: res.locals.t("find_id_success") },
+      userId: user.userId,
+    });
+  } catch (err) {
+    console.error("아이디 찾기 오류:", err);
+    res.status(500).json({
+  message: "서버 오류가 발생했습니다.",
+  i18n: { code: "find_id_failed", text: res.locals.t("find_id_failed") }, // ✅ 수정
+});
   }
 });
 
