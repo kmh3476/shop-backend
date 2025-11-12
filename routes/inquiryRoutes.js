@@ -136,6 +136,60 @@ router.post("/", protect, async (req, res) => {
 
     await newInquiry.save();
 
+    // ✅ 문의 등록 후 확인 메일 전송
+try {
+  const lang = req.headers["x-app-language"] || "ko";
+  const subject =
+    lang === "th"
+      ? "[OnYou] เราได้รับคำถามของคุณแล้ว"
+      : lang === "en"
+      ? "[OnYou] We've received your inquiry"
+      : "[OnYou] 문의가 정상적으로 등록되었습니다.";
+
+  const messageBody =
+    lang === "th"
+      ? `
+        <div style="font-family:sans-serif;line-height:1.6">
+          <h2>เราได้รับคำถามของคุณแล้ว</h2>
+          <p>ทีมงานของเราจะตอบกลับโดยเร็วที่สุด</p>
+          <p><strong>คำถาม:</strong> ${question}</p>
+          <hr/>
+          <p>ขอบคุณที่ติดต่อเรา<br/>ทีม OnYou</p>
+        </div>
+      `
+      : lang === "en"
+      ? `
+        <div style="font-family:sans-serif;line-height:1.6">
+          <h2>Your inquiry has been received</h2>
+          <p>Our team will get back to you shortly.</p>
+          <p><strong>Question:</strong> ${question}</p>
+          <hr/>
+          <p>Thank you for reaching out.<br/>- OnYou Support</p>
+        </div>
+      `
+      : `
+        <div style="font-family:sans-serif;line-height:1.6">
+          <h2>문의가 정상적으로 등록되었습니다.</h2>
+          <p>빠른 시일 내에 답변드리겠습니다.</p>
+          <p><strong>문의 내용:</strong> ${question}</p>
+          <hr/>
+          <p>감사합니다.<br/>OnYou 고객센터</p>
+        </div>
+      `;
+
+  if (email) {
+    await resend.emails.send({
+      from: "Onyou 고객센터 <no-reply@onyou.store>",
+      to: email,
+      subject,
+      html: messageBody,
+    });
+    console.log("📤 문의 등록 확인 메일 전송 완료:", email);
+  }
+} catch (error) {
+  console.error("❌ 문의 등록 확인 메일 전송 실패:", error);
+}
+
     console.log("✅ 문의 등록 완료:", {
       _id: newInquiry._id,
       question: newInquiry.question,
