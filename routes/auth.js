@@ -144,19 +144,49 @@ router.post("/send-email-code", async (req, res) => {
 
     setTimeout(() => emailVerificationCodes.delete(email), 10 * 60 * 1000);
 
-    const { error } = await resend.emails.send({
-      from: process.env.EMAIL_SENDER,
-      to: [email],
-      subject: "📧 이메일 인증 코드",
-      html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.6">
-          <h2>Shop Onyou 이메일 인증</h2>
-          <p>아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
-          <div style="font-size:22px;font-weight:bold;color:#007bff;">${code}</div>
-          <p>이 코드는 10분 동안만 유효합니다.<br/>감사합니다.<br/>- Onyou 팀</p>
-        </div>
-      `,
-    });
+    const lang = res.locals.lang; // "ko", "en", "th"
+
+const emailTemplates = {
+  ko: {
+    subject: "📧 이메일 인증 코드",
+    title: "Shop Onyou 이메일 인증",
+    body: `
+      <p>아래 인증 코드를 입력해 이메일 인증을 완료해주세요.</p>
+      <p>이 코드는 10분 동안만 유효합니다.<br/>감사합니다.<br/>- Onyou 팀</p>
+    `,
+  },
+  en: {
+    subject: "📧 Email Verification Code",
+    title: "Shop Onyou Email Verification",
+    body: `
+      <p>Please enter the code below to verify your email address.</p>
+      <p>This code is valid for 10 minutes.<br/>Thank you.<br/>- Onyou Team</p>
+    `,
+  },
+  th: {
+    subject: "📧 รหัสยืนยันอีเมล",
+    title: "การยืนยันอีเมล Shop Onyou",
+    body: `
+      <p>กรุณากรอกรหัสด้านล่างเพื่อยืนยันอีเมลของคุณ</p>
+      <p>รหัสนี้ใช้ได้ภายใน 10 นาที<br/>ขอบคุณค่ะ<br/>- ทีม Onyou</p>
+    `,
+  },
+};
+
+const template = emailTemplates[lang] || emailTemplates.en; // 기본 영어 fallback
+
+const { error } = await resend.emails.send({
+  from: process.env.EMAIL_SENDER,
+  to: [email],
+  subject: template.subject,
+  html: `
+    <div style="font-family:Arial,sans-serif;line-height:1.6">
+      <h2>${template.title}</h2>
+      <div style="font-size:22px;font-weight:bold;color:#007bff;">${code}</div>
+      ${template.body}
+    </div>
+  `,
+});
 
     if (error) throw new Error(error.message);
 
