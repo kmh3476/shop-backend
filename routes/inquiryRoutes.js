@@ -249,7 +249,7 @@ router.post("/notice", protect, adminOnly, async (req, res) => {
 });
 
 /* --------------------------------------------------------
- ✅ (6) 관리자 답변 등록 / 수정
+ ✅ (6) 관리자 답변 등록 / 수정 — 다국어 메일 발송 추가된 버전
 -------------------------------------------------------- */
 router.post("/:id/reply", protect, adminOnly, async (req, res) => {
   try {
@@ -272,28 +272,65 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
       email: inquiry.email,
     });
 
-    // ✅ 답변 이메일 발송
+    /* --------------------------------------------------------
+     📧 (추가된 부분) 관리자 답장 메일 다국어 지원
+    -------------------------------------------------------- */
+    const lang = req.headers["x-app-language"] || "ko";
+
+    const replySubject =
+      lang === "th"
+        ? "[OnYou] คำตอบสำหรับคำถามของคุณ"
+        : lang === "en"
+        ? "[OnYou] Response to your inquiry"
+        : "[OnYou] 문의하신 내용에 대한 답변입니다.";
+
+    const replyBody =
+      lang === "th"
+        ? `
+          <div style="font-family:sans-serif;line-height:1.6;color:#333">
+            <h2>เราตอบกลับคำถามของคุณแล้ว</h2>
+            <p><strong>หัวข้อคำถาม:</strong> ${inquiry.question}</p>
+            <p><strong>คำตอบ:</strong><br/>${reply}</p>
+            <hr/>
+            <p>ขอบคุณที่ติดต่อเรา<br/><strong>ทีมงาน OnYou</strong></p>
+          </div>
+        `
+        : lang === "en"
+        ? `
+          <div style="font-family:sans-serif;line-height:1.6;color:#333">
+            <h2>We have replied to your inquiry</h2>
+            <p><strong>Subject:</strong> ${inquiry.question}</p>
+            <p><strong>Reply:</strong><br/>${reply}</p>
+            <hr/>
+            <p>Thank you for contacting us.<br/><strong>OnYou Support</strong></p>
+          </div>
+        `
+        : `
+          <div style="font-family:sans-serif;line-height:1.6;color:#333">
+            <h2>문의하신 내용에 대한 답변입니다.</h2>
+            <p><strong>문의 제목:</strong> ${inquiry.question}</p>
+            <p><strong>답변 내용:</strong><br/>${reply}</p>
+            <hr/>
+            <p>감사합니다.<br/><strong>OnYou 고객센터</strong></p>
+          </div>
+        `;
+
     if (inquiry.email) {
       try {
         await resend.emails.send({
-          from: "support@onyou.store",
+          from: "OnYou 고객센터 <no-reply@onyou.store>",
           to: inquiry.email,
-          subject: "[OnYou] 문의하신 내용에 대한 답변입니다.",
-          html: `
-            <div style="font-family:sans-serif;line-height:1.6;color:#333">
-              <h2>문의하신 내용에 대한 답변입니다.</h2>
-              <p><strong>문의 제목:</strong> ${inquiry.question}</p>
-              <p><strong>답변 내용:</strong><br/>${reply}</p>
-              <hr style="border:none;border-top:1px solid #ddd;margin:10px 0"/>
-              <p>감사합니다.<br/><strong>OnYou 고객센터</strong></p>
-            </div>
-          `,
+          subject: replySubject,
+          html: replyBody,
         });
-        console.log("📧 답변 메일 발송 완료:", inquiry.email);
+
+        console.log("📧 답변 메일(다국어) 발송 완료:", inquiry.email);
       } catch (err) {
         console.error("📧 답변 메일 발송 실패:", err);
       }
     }
+
+    /* -------------------------------------------------------- */
 
     res.status(200).json({ message: "답변이 저장되었습니다.", inquiry });
   } catch (err) {
