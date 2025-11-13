@@ -271,6 +271,44 @@ router.delete("/:id", protect, adminOnly, async (req, res) => {
   }
 });
 
+// ✅ (고객용) 내 답장 삭제
+router.delete("/replies/:id", protect, async (req, res) => {
+  try {
+    const email = req.user?.email;
+    const { id } = req.params;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "이메일 정보가 없습니다.",
+      });
+    }
+
+    // 내 문의인지 확인하면서 찾기
+    const support = await Support.findOne({ _id: id, email });
+    if (!support) {
+      return res.status(404).json({
+        success: false,
+        message: "해당 메일을 찾을 수 없습니다.",
+      });
+    }
+
+    await support.deleteOne();
+
+    return res.json({
+      success: true,
+      message: "메일이 삭제되었습니다.",
+    });
+  } catch (err) {
+    console.error("❌ 고객 메일 삭제 실패:", err);
+    res.status(500).json({
+      success: false,
+      message: "삭제 중 서버 오류가 발생했습니다.",
+    });
+  }
+});
+  
+
 /* ===========================================================
  ⏱️ Rate Limiter (문의 남용 방지)
 =========================================================== */
@@ -289,6 +327,35 @@ const contactLimiter = rateLimit({
 router.post("/send", contactLimiter, async (req, res, next) => {
   next();
 });
+
+// ✅ (고객용) 내가 받은 관리자 답장 목록
+router.get("/replies", protect, async (req, res) => {
+  try {
+    const email = req.user?.email;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "이메일 정보가 없습니다.",
+      });
+    }
+
+    // 관리자 답장이 있는 것만 조회
+    const replies = await Support.find({
+      email,                            // 내 이메일
+      adminReply: { $exists: true, $ne: "" },
+    })
+      .sort({ updatedAt: -1 });
+
+    return res.json({ success: true, replies });
+  } catch (err) {
+    console.error("❌ 고객 답장 목록 조회 실패:", err);
+    res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+});
+
 
 /* ===========================================================
  🔍 상태 체크용 (Render 헬스체크 및 로그 테스트)
