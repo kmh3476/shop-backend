@@ -340,6 +340,39 @@ router.post("/:id/reply", protect, adminOnly, async (req, res) => {
 });
 
 /* --------------------------------------------------------
+ ✅ (새로 추가) 사용자 메일함 - 내가 받은 관리자 답변 조회
+     → MailModal에서 사용
+-------------------------------------------------------- */
+router.get("/my/replies", protect, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+
+    console.log("📬 [GET /api/inquiries/my/replies] 메일함 조회:", userEmail);
+
+    const inquiries = await Inquiry.find({ email: userEmail })
+      .sort({ updatedAt: -1 });
+
+    // 관리자 답변이 있는 문의만 추출
+    const replies = inquiries
+      .filter((inq) => inq.reply && inq.reply.trim() !== "")
+      .map((inq) => ({
+        _id: inq._id,
+        subject: inq.question.slice(0, 20) || "제목 없음",
+        message: inq.question,
+        adminReply: inq.reply,
+        createdAt: inq.createdAt,
+        updatedAt: inq.updatedAt
+      }));
+
+    res.json({ success: true, replies });
+  } catch (err) {
+    console.error("❌ 메일함 조회 실패:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+/* --------------------------------------------------------
  ✅ (7) 문의 삭제 (본인 또는 관리자만 가능)
 -------------------------------------------------------- */
 router.delete("/:id", protect, async (req, res) => {
