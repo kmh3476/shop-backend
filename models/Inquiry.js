@@ -61,6 +61,13 @@ const inquirySchema = new mongoose.Schema(
       default: false,
     },
 
+        // ✅ 사용자가 받은 관리자 답변을 "메일함에서만" 숨겼는지 여부
+    replyDeletedByUser: {
+      type: Boolean,
+      default: false,
+    },
+
+
     // ✅ 이메일 정보 (선택 입력)
     email: {
       type: String,

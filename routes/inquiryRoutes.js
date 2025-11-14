@@ -349,10 +349,16 @@ router.get("/my/replies", protect, async (req, res) => {
 
     console.log("📬 [GET /api/inquiries/my/replies] 메일함 조회:", userEmail);
 
-    const inquiries = await Inquiry.find({ email: userEmail })
-      .sort({ updatedAt: -1 });
+        const inquiries = await Inquiry.find({
+      email: userEmail,
+      // ✅ 답변이 실제로 존재하는 것만
+      reply: { $exists: true, $ne: "" },
+      // ✅ 사용자가 "메일함에서 삭제"한 것은 제외
+      replyDeletedByUser: { $ne: true },
+    }).sort({ updatedAt: -1 });
 
-    // 관리자 답변이 있는 문의만 추출
+    // 이미 reply가 있는 것만 찾았기 때문에 filter 는 사실 없어도 되지만,
+    // 안전하게 놔둬도 상관 없음
     const replies = inquiries
       .filter((inq) => inq.reply && inq.reply.trim() !== "")
       .map((inq) => ({
@@ -361,13 +367,52 @@ router.get("/my/replies", protect, async (req, res) => {
         message: inq.question,
         adminReply: inq.reply,
         createdAt: inq.createdAt,
-        updatedAt: inq.updatedAt
+        updatedAt: inq.updatedAt,
       }));
+
 
     res.json({ success: true, replies });
   } catch (err) {
     console.error("❌ 메일함 조회 실패:", err);
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* --------------------------------------------------------
+ ✅ (새로 추가) 메일함에서만 답변 숨기기
+   - 실제 문의(inquiry) 문서는 삭제하지 않고,
+     해당 사용자의 메일함에서만 안 보이게 처리
+   - 프론트: DELETE /api/inquiries/my/replies/:id
+-------------------------------------------------------- */
+router.delete("/my/replies/:id", protect, async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+    const { id } = req.params;
+
+    console.log(`🗑️ [DELETE /api/inquiries/my/replies/${id}] 메일 삭제 요청:`, userEmail);
+
+    const inquiry = await Inquiry.findOne({
+      _id: id,
+      email: userEmail,                    // 내 메일만 삭제 가능
+      reply: { $exists: true, $ne: "" },   // 관리자 답변이 실제로 있는 문의만
+    });
+
+    if (!inquiry) {
+      console.warn("⚠️ 메일 삭제 실패 - 대상 없음:", id);
+      return res.status(404).json({
+        message: "삭제할 메일을 찾을 수 없습니다.",
+      });
+    }
+
+    // ✅ 메일함에서만 숨기기
+    inquiry.replyDeletedByUser = true;
+    await inquiry.save();
+
+    console.log("✅ 메일 숨김 처리 완료:", inquiry._id);
+    res.json({ message: "메일이 삭제되었습니다." });
+  } catch (err) {
+    console.error("❌ [DELETE /api/inquiries/my/replies/:id] 오류:", err);
+    res.status(500).json({ message: "메일 삭제 중 오류가 발생했습니다." });
   }
 });
 
