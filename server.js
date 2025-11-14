@@ -44,7 +44,7 @@ const allowedOrigins = [
   "https://www.onyou.store",
   "https://project-onyou.vercel.app",
   "https://shop-frontend-cz3y-kmh3476s-projects.vercel.app",
-  "https://shop-frontend-cz3y-fkz5lz79r-kmh3476s-projects.vercel.app",
+  "https://shop-frontend-cz3y-cfal5yqqj-kmh3476s-projects.vercel.app",
   "https://shop-backend-1-dfsl.onrender.com",
 ];
 
